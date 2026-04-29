@@ -202,11 +202,14 @@ const MINS_END     = 22 * 60;   // 10:00 PM
 const SCHOOL_START = 8  * 60;   // block from 8 AM
 const SCHOOL_END   = 16 * 60;   // block until 4 PM
 
+// Auto-detect base path for GitHub Pages subfolder hosting
+const BASE = location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+
 const FEEDS = [
-  { name: 'Kooi Family',      url: '/feeds/kooi-family.ics' },
-  { name: 'Kooi Ohio',        url: '/feeds/kooi-ohio.ics' },
-  { name: 'Drem Soccer',      url: '/feeds/drem-soccer.ics' },
-  { name: 'Sofie Volleyball', url: '/feeds/sofie-volleyball.ics' },
+  { name: 'Kooi Family',      url: BASE + '/feeds/kooi-family.ics' },
+  { name: 'Kooi Ohio',        url: BASE + '/feeds/kooi-ohio.ics' },
+  { name: 'Drem Soccer',      url: BASE + '/feeds/drem-soccer.ics' },
+  { name: 'Sofie Volleyball', url: BASE + '/feeds/sofie-volleyball.ics' },
 ];
 
 
@@ -304,15 +307,9 @@ function addDuration(start, dur) {
 
 // ── FETCH ─────────────────────────────────────────────────────────────────
 async function fetchFeed(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
-  try {
-    const r = await fetch(url, { signal: controller.signal });
-    if (r.ok) return await r.text();
-    throw new Error('HTTP ' + r.status);
-  } finally {
-    clearTimeout(timer);
-  }
+  const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (r.ok) return await r.text();
+  throw new Error('HTTP ' + r.status);
 }
 
 async function loadAll() {
