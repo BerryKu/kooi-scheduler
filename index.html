@@ -463,8 +463,7 @@ function goToToday() { weekOffset = 0; renderGrid(); }
 
 
 // ── CELL INTERACTION ───────────────────────────────────────────────────────
-let _popover  = null;
-let _isTouchTap = false;
+let _popover = null;
 
 function dismissPopover() {
   if (_popover) { _popover.remove(); _popover = null; }
@@ -484,12 +483,15 @@ function showPopover(cell, dateISO, mins, maxMins) {
   document.body.appendChild(p);
 
   const btn = document.getElementById('popBtn');
+
   btn.addEventListener('touchend', e => {
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
+    const d = dateISO, m = mins, mx = maxMins;
     dismissPopover();
-    openModal(dateISO, mins, maxMins);
+    setTimeout(() => openModal(d, m, mx), 10);
   }, { passive: false });
+
   btn.addEventListener('click', e => {
     e.stopPropagation();
     dismissPopover();
@@ -504,36 +506,32 @@ function showPopover(cell, dateISO, mins, maxMins) {
   p.style.left = left + 'px';
   p.style.top  = top + 'px';
   _popover = p;
-  _justShown = true;
 }
 
-// Touchstart on grid — flag that next interaction is touch
-document.getElementById('calGrid').addEventListener('touchstart', e => {
+// TOUCH: touchend on cells — no ghost click issues on iOS
+document.getElementById('calGrid').addEventListener('touchend', e => {
   const cell = e.target.closest('[data-date]');
-  if (cell) _isTouchTap = true;
-}, { passive: true });
+  if (!cell) return;
+  e.preventDefault();
+  const dateISO = cell.dataset.date;
+  const mins    = parseInt(cell.dataset.mins);
+  const maxMins = getMaxDuration(new Date(dateISO), mins);
+  showPopover(cell, dateISO, mins, maxMins);
+}, { passive: false });
 
-// Single delegated click listener
+// MOUSE: click on cells — desktop only
 document.getElementById('calGrid').addEventListener('click', e => {
+  if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
   const cell = e.target.closest('[data-date]');
   if (!cell) return;
   const dateISO = cell.dataset.date;
   const mins    = parseInt(cell.dataset.mins);
   const maxMins = getMaxDuration(new Date(dateISO), mins);
-  const wasTouch = _isTouchTap;
-  _isTouchTap = false;
-  if (wasTouch) {
-    showPopover(cell, dateISO, mins, maxMins);
-  } else {
-    openModal(dateISO, mins, maxMins);
-  }
+  openModal(dateISO, mins, maxMins);
 });
 
-// Dismiss on outside touch or click
-// _justShown guard prevents the same tap that created the popover from immediately dismissing it
-let _justShown = false;
-document.addEventListener('touchstart', e => {
-  if (_justShown) { _justShown = false; return; }
+// Dismiss on outside tap or click
+document.addEventListener('touchend', e => {
   if (_popover && !_popover.contains(e.target)) dismissPopover();
 }, { passive: true });
 document.addEventListener('click', e => {
