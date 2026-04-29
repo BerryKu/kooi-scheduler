@@ -405,7 +405,7 @@ function fmtSlot(mins) {
   return m === 0 ? `${h12}${ap}` : `${h12}:30`;
 }
 
-function fmtWeekRange(start) {
+function fmtWeekRange(start, numDays) {
   const end = new Date(start); end.setDate(end.getDate() + (numDays - 1));
   return `${MONTHS[start.getMonth()]} ${start.getDate()} \u2013 ${MONTHS[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
 }
@@ -418,7 +418,7 @@ function renderGrid() {
   const grid  = document.getElementById('calGrid');
   const start = getWeekStart();
   const now   = new Date();
-  document.getElementById('weekLabel').textContent = fmtWeekRange(start);
+  document.getElementById('weekLabel').textContent = fmtWeekRange(start, numDays);
 
   let html = `<div class="col-header corner"></div>`;
   for (let i = 0; i < numDays; i++) {
