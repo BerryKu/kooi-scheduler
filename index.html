@@ -504,6 +504,7 @@ function showPopover(cell, dateISO, mins, maxMins) {
   p.style.left = left + 'px';
   p.style.top  = top + 'px';
   _popover = p;
+  _justShown = true;
 }
 
 // Touchstart on grid — flag that next interaction is touch
@@ -529,7 +530,10 @@ document.getElementById('calGrid').addEventListener('click', e => {
 });
 
 // Dismiss on outside touch or click
+// _justShown guard prevents the same tap that created the popover from immediately dismissing it
+let _justShown = false;
 document.addEventListener('touchstart', e => {
+  if (_justShown) { _justShown = false; return; }
   if (_popover && !_popover.contains(e.target)) dismissPopover();
 }, { passive: true });
 document.addEventListener('click', e => {
