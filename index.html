@@ -42,7 +42,7 @@
     .grid-wrapper { overflow-x: auto; padding: 0 1rem 2rem; -webkit-overflow-scrolling: touch; }
     .grid {
       display: grid;
-      grid-template-columns: 52px repeat(14, 1fr);
+      grid-template-columns: 52px repeat(14, 1fr); /* overridden by JS */
       min-width: 900px; max-width: 1400px;
       margin: 0 auto;
       border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
@@ -94,9 +94,9 @@
     /* ── MOBILE ── */
     @media (max-width: 767px) {
       .grid {
-        grid-template-columns: 36px repeat(7, 1fr) !important;
         min-width: unset !important;
         max-width: 100% !important;
+        width: 100% !important;
       }
       .grid-wrap { padding: 0 .4rem .75rem; overflow-x: hidden; }
       .col-hdr { font-size: .58rem; padding: .35rem .1rem; letter-spacing: 0; }
@@ -419,6 +419,9 @@ function renderGrid() {
   const start = getWeekStart();
   const now   = new Date();
   document.getElementById('weekLabel').textContent = fmtWeekRange(start, numDays);
+
+  // Set grid columns dynamically
+  document.getElementById('calGrid').style.gridTemplateColumns = `36px repeat(${numDays}, 1fr)`;
 
   let html = `<div class="col-header corner"></div>`;
   for (let i = 0; i < numDays; i++) {
