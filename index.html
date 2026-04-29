@@ -304,9 +304,15 @@ function addDuration(start, dur) {
 
 // ── FETCH ─────────────────────────────────────────────────────────────────
 async function fetchFeed(url) {
-  const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (r.ok) return await r.text();
-  throw new Error('HTTP ' + r.status);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(url, { signal: controller.signal });
+    if (r.ok) return await r.text();
+    throw new Error('HTTP ' + r.status);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function loadAll() {
