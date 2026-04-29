@@ -34,7 +34,7 @@
     .nav-btn:hover { background: #BFDBFE; border-color: #60A5FA; }
     .today-btn { background: #FDE8D8; border-color: #F99152; color: #C4540F; }
     .today-btn:hover { background: #FBCFAA; border-color: var(--orange); }
-    .week-label { font-size: .9rem; font-weight: 500; min-width: 220px; text-align: center; }
+    .week-label { font-size: .9rem; font-weight: 600; min-width: 220px; text-align: center; color: #FFFFFF; }
 
     .status-bar { text-align: center; font-size: .78rem; color: #9A9A9A; padding: .4rem 1rem .8rem; min-height: 2rem; }
     .status-bar.error { color: #c0392b; }
@@ -90,6 +90,28 @@
     .btn-download { flex: 1; padding: .72rem; background: var(--orange); color: white; border: none; border-radius: 9px; font-family: 'Outfit', sans-serif; font-size: .88rem; font-weight: 600; cursor: pointer; }
     .btn-download:hover { background: var(--orange-hover); }
     .download-note { font-size: .72rem; color: var(--text-soft); text-align: center; margin-top: .75rem; font-weight: 300; }
+
+    /* ── MOBILE ── */
+    @media (max-width: 767px) {
+      .grid {
+        grid-template-columns: 36px repeat(7, 1fr) !important;
+        min-width: unset !important;
+        max-width: 100% !important;
+      }
+      .grid-wrap { padding: 0 .4rem .75rem; overflow-x: hidden; }
+      .col-hdr { font-size: .58rem; padding: .35rem .1rem; letter-spacing: 0; }
+      .tlabel { font-size: .55rem; padding: 0 .2rem; }
+      .cell { height: 18px; }
+      .week-nav { gap: .4rem; flex-wrap: wrap; }
+      .nav-btn { padding: .35rem .6rem; font-size: .75rem; }
+      .week-label { font-size: .78rem; min-width: unset; width: 100%; order: -1; text-align: center; }
+      h1 { font-size: 1.4rem; }
+      .subtitle { font-size: .78rem; }
+      .header { padding: 1rem .75rem .75rem; }
+      .modal { padding: 1.25rem; width: 95%; }
+      .location-wrap { flex-direction: column; }
+      #mapPreview { width: 100% !important; height: 120px; }
+    }
 
     #slot-popover {
       position: fixed;
@@ -384,19 +406,22 @@ function fmtSlot(mins) {
 }
 
 function fmtWeekRange(start) {
-  const end = new Date(start); end.setDate(end.getDate() + 13);
+  const end = new Date(start); end.setDate(end.getDate() + (numDays - 1));
   return `${MONTHS[start.getMonth()]} ${start.getDate()} \u2013 ${MONTHS[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────────
+function isMobileWidth() { return window.innerWidth < 768; }
+
 function renderGrid() {
+  const numDays = isMobileWidth() ? 7 : 14;
   const grid  = document.getElementById('calGrid');
   const start = getWeekStart();
   const now   = new Date();
   document.getElementById('weekLabel').textContent = fmtWeekRange(start);
 
   let html = `<div class="col-header corner"></div>`;
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < numDays; i++) {
     const d = new Date(start); d.setDate(d.getDate() + i);
     const today = d.toDateString() === now.toDateString();
     const sep = i === 7 ? ' style="border-left:2px solid var(--border)"' : '';
@@ -406,7 +431,7 @@ function renderGrid() {
   for (let mins = MINS_START; mins < MINS_END; mins += 30) {
     const isHalf = mins % 60 !== 0;
     html += `<div class="time-label${isHalf ? ' half' : ''}">${isHalf ? '' : fmtSlot(mins)}</div>`;
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < numDays; i++) {
       const d = new Date(start); d.setDate(d.getDate() + i);
       const slot = new Date(d); slot.setHours(Math.floor(mins/60), mins%60, 0, 0);
       const buffer = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -435,13 +460,8 @@ function goToToday() { weekOffset = 0; renderGrid(); }
 
 
 // ── CELL INTERACTION ───────────────────────────────────────────────────────
-let _popover = null;
-let _lastPointerType = 'mouse';
-
-// Track pointer type BEFORE the click fires — works in Safari + Chrome on iOS
-document.addEventListener('pointerdown', e => {
-  _lastPointerType = e.pointerType || 'mouse';
-}, { capture: true, passive: true });
+let _popover  = null;
+let _isTouchTap = false;
 
 function dismissPopover() {
   if (_popover) { _popover.remove(); _popover = null; }
@@ -460,7 +480,14 @@ function showPopover(cell, dateISO, mins, maxMins) {
   p.innerHTML = `<span>Schedule ${fmtSlot(mins)}?</span><button class="pop-confirm" id="popBtn">&#10003;</button>`;
   document.body.appendChild(p);
 
-  document.getElementById('popBtn').addEventListener('click', e => {
+  const btn = document.getElementById('popBtn');
+  btn.addEventListener('touchend', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dismissPopover();
+    openModal(dateISO, mins, maxMins);
+  }, { passive: false });
+  btn.addEventListener('click', e => {
     e.stopPropagation();
     dismissPopover();
     openModal(dateISO, mins, maxMins);
@@ -476,21 +503,32 @@ function showPopover(cell, dateISO, mins, maxMins) {
   _popover = p;
 }
 
-// Single delegated click listener on the grid
+// Touchstart on grid — flag that next interaction is touch
+document.getElementById('calGrid').addEventListener('touchstart', e => {
+  const cell = e.target.closest('[data-date]');
+  if (cell) _isTouchTap = true;
+}, { passive: true });
+
+// Single delegated click listener
 document.getElementById('calGrid').addEventListener('click', e => {
   const cell = e.target.closest('[data-date]');
   if (!cell) return;
   const dateISO = cell.dataset.date;
   const mins    = parseInt(cell.dataset.mins);
   const maxMins = getMaxDuration(new Date(dateISO), mins);
-  if (_lastPointerType === 'touch') {
+  const wasTouch = _isTouchTap;
+  _isTouchTap = false;
+  if (wasTouch) {
     showPopover(cell, dateISO, mins, maxMins);
   } else {
     openModal(dateISO, mins, maxMins);
   }
 });
 
-// Dismiss popover on outside click
+// Dismiss on outside touch or click
+document.addEventListener('touchstart', e => {
+  if (_popover && !_popover.contains(e.target)) dismissPopover();
+}, { passive: true });
 document.addEventListener('click', e => {
   if (_popover && !_popover.contains(e.target)) dismissPopover();
 });
@@ -632,6 +670,13 @@ function setStatus(msg, isError=false) {
   el.textContent = msg;
   el.className = 'status-bar' + (isError ? ' error' : '');
 }
+
+// Re-render on resize so mobile/desktop switch works
+let _resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(renderGrid, 150);
+});
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 renderGrid();
