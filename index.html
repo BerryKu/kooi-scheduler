@@ -322,6 +322,20 @@ let allEvents    = [];
 let loading      = true;
 let selectedSlot = null; // { date, mins }
 
+// ── DATE PARSER (for server-side free/busy slots) ─────────────────────────
+function parseICSDate(val) {
+  if (!val) return null;
+  val = val.trim();
+  // All-day: YYYYMMDD
+  if (/^\d{8}$/.test(val)) return new Date(+val.slice(0,4), +val.slice(4,6)-1, +val.slice(6,8));
+  // DateTime
+  const d = val.replace(/[TZ]/g,'');
+  const y=+d.slice(0,4), mo=+d.slice(4,6)-1, dy=+d.slice(6,8);
+  const h=d.length>=10?+d.slice(8,10):0, mi=d.length>=12?+d.slice(10,12):0;
+  if (val.endsWith('Z')) return new Date(Date.UTC(y,mo,dy,h,mi,0));
+  return new Date(y,mo,dy,h,mi,0);
+}
+
 // ── ICS PARSER ────────────────────────────────────────────────────────────
 function parseICS(raw) {
   const text = raw.replace(/\r\n[ \t]/g,'').replace(/\r\n|\r|\n/g,'\n').replace(/\n[ \t]/g,'\n');
@@ -363,17 +377,53 @@ function addDuration(start, dur) {
 
 async function loadAll() {
   setStatus('Loading calendars…');
-  const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url).then(parseICS)));
-  const failed = [];
-  allEvents = [];
-  results.forEach((r, i) => {
-    if (r.status === 'fulfilled') { allEvents.push(...r.value); }
-    else { failed.push(FEEDS[i].name); console.warn(FEEDS[i].name, r.reason); }
-  });
-  loading = false;
-  if (!failed.length)        setStatus('✓ All calendars loaded');
-  else if (failed.length < FEEDS.length) setStatus('Loaded ' + (FEEDS.length - failed.length) + ' of ' + FEEDS.length + ' — Failed: ' + failed.join(', '), true);
-  else                       setStatus('⚠ Could not load calendars', true);
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const cbName = '_kooiCb_' + Date.now();
+      const script = document.createElement('script');
+      const timer = setTimeout(() => {
+        delete window[cbName]; document.body.removeChild(script);
+        reject(new Error('Timeout'));
+      }, 20000);
+      window[cbName] = (d) => {
+        clearTimeout(timer); delete window[cbName]; document.body.removeChild(script);
+        resolve(d);
+      };
+      script.src = GOOGLE_SCRIPT_URL + '?action=feeds&token=' + encodeURIComponent(SCRIPT_TOKEN) + '&callback=' + cbName;
+      script.onerror = () => { clearTimeout(timer); reject(new Error('Script failed')); };
+      document.body.appendChild(script);
+    });
+
+    if (data.status !== 'ok') throw new Error(data.message || 'Feed error');
+
+    allEvents = [];
+    const failed = [];
+    const feedNames = ['kooi-family', 'kooi-ohio', 'drem-soccer', 'sofie-volleyball'];
+    for (const name of feedNames) {
+      const slots = data.feeds[name];
+      if (slots && slots.length > 0) {
+        // Convert {start, end} string pairs to Date objects
+        for (const slot of slots) {
+          const s = parseICSDate(slot.start);
+          const e = parseICSDate(slot.end || slot.start);
+          if (s) allEvents.push({ start: s, end: e || s });
+        }
+      } else if (!slots || slots.length === 0) {
+        if (data.errors && data.errors[name]) failed.push(name);
+      }
+    }
+
+    loading = false;
+    const loadedCount = feedNames.filter(n => data.feeds[n] && !data.errors?.[n]).length;
+    if (failed.length === 0)           setStatus('✓ All calendars loaded');
+    else if (failed.length < feedNames.length) setStatus('Loaded ' + (feedNames.length - failed.length) + ' of ' + feedNames.length + ' — Failed: ' + failed.join(', '), true);
+    else                               setStatus('⚠ Could not load calendars', true);
+
+  } catch(err) {
+    loading = false;
+    setStatus('⚠ Could not load calendars — ' + err.message, true);
+    console.warn('loadAll error:', err);
+  }
   renderGrid();
 }
 
