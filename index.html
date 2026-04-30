@@ -240,7 +240,33 @@ const MINS_END     = 22 * 60;   // 10:00 PM
 const SCHOOL_START = 8  * 60;   // block from 8 AM
 const SCHOOL_END   = 16 * 60;   // block until 4 PM
 
-const FEED_NAMES = ['kooi-family', 'kooi-ohio', 'drem-soccer', 'sofie-volleyball'];
+const FEEDS = [
+  { name: 'Kooi Family',      url: 'https://p127-caldav.icloud.com/published/2/NTcxMTY4NTQ4NTcxMTY4NUwc29ymuumPBBLSLt2tLutpgn3SIKQqSpD9hidKI2ud' },
+  { name: 'Kooi Ohio',        url: 'https://p127-caldav.icloud.com/published/2/NTcxMTY4NTQ4NTcxMTY4NUwc29ymuumPBBLSLt2tLutqLKSt5Bzb6nhqLwHKvCAj_9vavH1LcgDvs6lFwmX4pT2mAJu2lj7LHEW8CT4rbqA' },
+  { name: 'Drem Soccer',      url: 'https://calendar.playmetrics.com/calendars/c610/t359149/p0/t08BC233F/f/calendar.ics' },
+  { name: 'Sofie Volleyball', url: 'https://www.nextvolleyballclub.com/ical_feed?tags=8318994' },
+];
+
+const CORS_PROXIES = [
+  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+];
+
+async function fetchFeed(url) {
+  // Try direct first (works for iCloud public calendars)
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (r.ok) return await r.text();
+  } catch(e) {}
+  // Fall back to CORS proxies
+  for (const proxy of CORS_PROXIES) {
+    try {
+      const r = await fetch(proxy(url), { signal: AbortSignal.timeout(8000) });
+      if (r.ok) return await r.text();
+    } catch(e) {}
+  }
+  throw new Error('All fetch methods failed');
+}
 
 
 // ── SCHOOL CALENDAR ────────────────────────────────────────────────────────
@@ -337,43 +363,17 @@ function addDuration(start, dur) {
 
 async function loadAll() {
   setStatus('Loading calendars…');
-  try {
-    const data = await new Promise((resolve, reject) => {
-      const cbName = '_kooiCb_' + Date.now();
-      const script = document.createElement('script');
-      const timer = setTimeout(() => {
-        delete window[cbName];
-        document.body.removeChild(script);
-        reject(new Error('Timeout'));
-      }, 20000);
-      window[cbName] = (d) => {
-        clearTimeout(timer);
-        delete window[cbName];
-        document.body.removeChild(script);
-        resolve(d);
-      };
-      script.src = GOOGLE_SCRIPT_URL + '?action=feeds&token=' + encodeURIComponent(SCRIPT_TOKEN) + '&callback=' + cbName;
-      script.onerror = () => { clearTimeout(timer); reject(new Error('Script load failed')); };
-      document.body.appendChild(script);
-    });
-    if (data.status !== 'ok') throw new Error(data.message || 'Feed error');
-    const failed = [];
-    allEvents = [];
-    for (const name of FEED_NAMES) {
-      if (data.feeds[name]) {
-        try { allEvents.push(...parseICS(data.feeds[name])); }
-        catch(e) { failed.push(name); }
-      } else { failed.push(name); }
-    }
-    loading = false;
-    if (!failed.length)  setStatus('✓ All calendars loaded');
-    else if (failed.length < FEED_NAMES.length) setStatus('Loaded ' + (FEED_NAMES.length - failed.length) + ' of ' + FEED_NAMES.length + ' — Failed: ' + failed.join(', '), true);
-    else setStatus('⚠ Could not load calendars', true);
-  } catch(err) {
-    loading = false;
-    setStatus('⚠ Could not load calendars — ' + err.message, true);
-    console.warn('loadAll error:', err);
-  }
+  const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url).then(parseICS)));
+  const failed = [];
+  allEvents = [];
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') { allEvents.push(...r.value); }
+    else { failed.push(FEEDS[i].name); console.warn(FEEDS[i].name, r.reason); }
+  });
+  loading = false;
+  if (!failed.length)        setStatus('✓ All calendars loaded');
+  else if (failed.length < FEEDS.length) setStatus('Loaded ' + (FEEDS.length - failed.length) + ' of ' + FEEDS.length + ' — Failed: ' + failed.join(', '), true);
+  else                       setStatus('⚠ Could not load calendars', true);
   renderGrid();
 }
 
