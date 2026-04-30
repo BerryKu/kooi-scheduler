@@ -240,15 +240,7 @@ const MINS_END     = 22 * 60;   // 10:00 PM
 const SCHOOL_START = 8  * 60;   // block from 8 AM
 const SCHOOL_END   = 16 * 60;   // block until 4 PM
 
-// Auto-detect base path for GitHub Pages subfolder hosting
-const BASE = location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
-
-const FEEDS = [
-  { name: 'Kooi Family',      url: BASE + '/feeds/kooi-family.ics' },
-  { name: 'Kooi Ohio',        url: BASE + '/feeds/kooi-ohio.ics' },
-  { name: 'Drem Soccer',      url: BASE + '/feeds/drem-soccer.ics' },
-  { name: 'Sofie Volleyball', url: BASE + '/feeds/sofie-volleyball.ics' },
-];
+const FEED_NAMES = ['kooi-family', 'kooi-ohio', 'drem-soccer', 'sofie-volleyball'];
 
 
 // ── SCHOOL CALENDAR ────────────────────────────────────────────────────────
@@ -343,29 +335,34 @@ function addDuration(start, dur) {
   return new Date(start.getTime() + days*86400000 + hrs*3600000 + mins*60000);
 }
 
-// ── FETCH ─────────────────────────────────────────────────────────────────
-async function fetchFeed(url) {
-  const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (r.ok) return await r.text();
-  throw new Error('HTTP ' + r.status);
-}
-
 async function loadAll() {
-  setStatus('Loading calendars\u2026');
-  const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url).then(parseICS)));
-  const failed = [];
-  allEvents = [];
-  results.forEach((r,i) => {
-    if (r.status === 'fulfilled') { allEvents.push(...r.value); }
-    else { failed.push(FEEDS[i].name); console.warn(FEEDS[i].name, r.reason); }
-  });
-  loading = false;
-  const ok = FEEDS.length - failed.length;
-  if (!failed.length)  setStatus('\u2713 All calendars loaded');
-  else if (ok > 0)     setStatus(`Loaded ${ok} of ${FEEDS.length} \u2014 Failed: ${failed.join(', ')}`, true);
-  else                 setStatus('\u26A0 Could not load calendars', true);
+  setStatus('Loading calendars…');
+  try {
+    const url = GOOGLE_SCRIPT_URL + '?action=feeds&token=' + encodeURIComponent(SCRIPT_TOKEN);
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Feed error');
+    const failed = [];
+    allEvents = [];
+    for (const name of FEED_NAMES) {
+      if (data.feeds[name]) {
+        try { allEvents.push(...parseICS(data.feeds[name])); }
+        catch(e) { failed.push(name); }
+      } else { failed.push(name); }
+    }
+    loading = false;
+    if (!failed.length)  setStatus('✓ All calendars loaded');
+    else if (failed.length < FEED_NAMES.length) setStatus('Loaded ' + (FEED_NAMES.length - failed.length) + ' of ' + FEED_NAMES.length + ' — Failed: ' + failed.join(', '), true);
+    else setStatus('⚠ Could not load calendars', true);
+  } catch(err) {
+    loading = false;
+    setStatus('⚠ Could not load calendars — ' + err.message, true);
+    console.warn('loadAll error:', err);
+  }
   renderGrid();
 }
+
 
 // ── BUSY CHECK ────────────────────────────────────────────────────────────
 function slotStatus(date, startMins) {
