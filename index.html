@@ -58,7 +58,7 @@
     .cell { height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); transition: background .1s; }
     button.cell { all: unset; height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: block; width: 100%; cursor: pointer; }
     .cell:last-child { border-right: none; }
-    .cell.half-hour { border-bottom-style: dotted; }
+    .cell.half-hour { border-bottom-color: #E0E0E0; border-bottom-style: dotted; }
     .cell.available { background: var(--orange-pale); cursor: pointer; position: relative; }
     .cell.available:hover { background: var(--orange); }
     .cell.available:hover::after { content: attr(data-time); position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 9px; font-weight: 600; color: #FFFFFF; white-space: nowrap; pointer-events: none; font-family: 'Outfit',sans-serif; display: none; }
