@@ -61,7 +61,7 @@
     .cell.half-hour { border-bottom-style: dotted; }
     .cell.available { background: var(--orange-pale); cursor: pointer; position: relative; }
     .cell.available:hover { background: var(--orange); }
-    .cell.available:hover::after { content: attr(data-time); position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 9px; font-weight: 600; color: #FFFFFF; white-space: nowrap; pointer-events: none; font-family: 'Outfit',sans-serif; }
+    .cell.available:hover::after { content: attr(data-time); position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 9px; font-weight: 600; color: #FFFFFF; white-space: nowrap; pointer-events: none; font-family: 'Outfit',sans-serif; display: none; }
     .cell.busy    { background: var(--busy); cursor: default; }
     .cell.past    { background: var(--past); opacity: .55; cursor: default; }
     .cell.loading { background: linear-gradient(90deg,#EEEAE5 25%,#F5F2EE 50%,#EEEAE5 75%); background-size: 300% 100%; animation: shimmer 1.6s infinite linear; }
@@ -170,6 +170,7 @@
   <div class="grid" id="calGrid"></div>
 </div>
 
+
 <div class="legend">
   <div class="legend-item"><div class="legend-swatch" style="background:var(--orange-pale)"></div> Available — click to schedule</div>
   <div class="legend-item"><div class="legend-swatch" style="background:var(--busy)"></div> Busy</div>
@@ -197,7 +198,7 @@
       </select>
     </div>
     <div class="field">
-      <label>Location (optional)</label>
+      <label>Location</label>
       <div class="location-wrap">
         <div class="location-input-col">
           <input type="text" id="locationField" placeholder="e.g. 123 Main St, Powell, OH" autocomplete="off">
@@ -485,7 +486,7 @@ function renderGrid() {
       else {
         st = slotStatus(d, mins);
         cls += ' ' + st;
-        if (st === 'available') click = `data-date="${d.toISOString()}" data-mins="${mins}" data-time="${fmtSlot(mins)}"`;
+        if (st === 'available') click = `data-date="${d.toISOString()}" data-mins="${mins}" data-day="${i}" data-time="${fmtSlot(mins)}"`;
       }
       const sepStyle = i === 7 ? ' style="border-left:2px solid #C8C2BB"' : '';
       if (st === 'available') {
@@ -504,14 +505,14 @@ function goToToday() { weekOffset = 0; renderGrid(); }
 
 
 // ── CELL INTERACTION ───────────────────────────────────────────────────────
-// Available cells are <button> elements — click fires natively on all iOS browsers
+// Both desktop and mobile: click shows popover, confirm opens modal
 let _popover = null;
 
 function dismissPopover() {
   if (_popover) { _popover.remove(); _popover = null; }
 }
 
-function showPopover(cell, dateISO, mins, maxMins) {
+function showPopover(cell, dateISO, dayIdx, mins, maxMins) {
   if (_popover && _popover.dataset.slot === dateISO + mins) {
     dismissPopover(); return;
   }
@@ -527,11 +528,11 @@ function showPopover(cell, dateISO, mins, maxMins) {
   document.getElementById('popBtn').addEventListener('click', e => {
     e.stopPropagation();
     dismissPopover();
-    openModal(dateISO, mins, maxMins);
+    openModal(dateISO, mins, maxMins, null);
   });
 
   let left = rect.right + 8;
-  let top  = rect.top + window.scrollY - 4;
+  let top  = rect.top - 4;
   const pw = p.offsetWidth;
   if (left + pw > window.innerWidth - 8) left = rect.left - pw - 8;
   if (left < 8) left = 8;
@@ -540,20 +541,16 @@ function showPopover(cell, dateISO, mins, maxMins) {
   _popover = p;
 }
 
-// Delegated click on grid — works on desktop AND iOS because cells are <button>
+// Single click handler for both desktop and mobile
 document.getElementById('calGrid').addEventListener('click', e => {
   const cell = e.target.closest('button[data-date]');
-  if (!cell) return;
+  if (!cell) { dismissPopover(); return; }
+  e.stopPropagation(); // prevent document click from immediately dismissing popover
   const dateISO = cell.dataset.date;
+  const dayIdx  = parseInt(cell.dataset.day);
   const mins    = parseInt(cell.dataset.mins);
   const maxMins = getMaxDuration(new Date(dateISO), mins);
-  // Show popover on touch devices, open modal directly on desktop
-  const isTouch = window.matchMedia('(hover: none)').matches || navigator.maxTouchPoints > 0;
-  if (isTouch) {
-    showPopover(cell, dateISO, mins, maxMins);
-  } else {
-    openModal(dateISO, mins, maxMins);
-  }
+  showPopover(cell, dateISO, dayIdx, mins, maxMins);
 });
 
 // Dismiss on outside click
@@ -604,11 +601,19 @@ function showMapForText(text) {
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────────
-function openModal(dateISO, mins, maxMins) {
+function openModal(dateISO, mins, maxMins, presetMins) {
   const d = new Date(dateISO); d.setHours(Math.floor(mins/60), mins%60, 0, 0);
   selectedSlot = { date: d, mins };
-  document.getElementById('slotDisplay').textContent =
-    `${DAYS_LONG[d.getDay()]}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()} at ${fmtSlot(mins)}`;
+
+  // Show time range if multi-slot selected
+  if (presetMins && presetMins > 30) {
+    const endMins = mins + presetMins;
+    document.getElementById('slotDisplay').textContent =
+      `${DAYS_LONG[d.getDay()]}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()} — ${fmtSlot(mins)} to ${fmtSlot(endMins)}`;
+  } else {
+    document.getElementById('slotDisplay').textContent =
+      `${DAYS_LONG[d.getDay()]}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()} at ${fmtSlot(mins)}`;
+  }
 
   // Build duration options based on available consecutive time
   const allDurations = [
@@ -623,7 +628,7 @@ function openModal(dateISO, mins, maxMins) {
   const sel = document.getElementById('duration');
   sel.innerHTML = allDurations
     .filter(opt => opt.mins <= maxMins)
-    .map((opt, i) => `<option value="${opt.mins}"${i === 0 ? ' selected' : ''}>${opt.label}</option>`)
+    .map(opt => `<option value="${opt.mins}"${opt.mins === presetMins ? ' selected' : ''}>${opt.label}</option>`)
     .join('');
 
   document.getElementById('overlay').classList.add('open');
