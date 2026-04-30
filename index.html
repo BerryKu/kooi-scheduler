@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kooi Family — Schedule Time Together</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:           #1E1E1E;
+      --surface:      #FFFFFF;
+      --text:         #1A2B19;
+      --text-soft:    #757575;
+      --orange:        #F36C21;
+      --orange-hover:  #C4540F;
+      --orange-light:  #F99152;
+      --orange-pale:   #FFFFFF;
+      --busy:         #E4E4E4;
+      --past:         #EBEBEB;
+      --border:       #D8D8D8;
+      --shadow:       0 4px 24px rgba(0,0,0,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    header { padding: 2.5rem 1.5rem 1.5rem; text-align: center; }
+    .eyebrow { font-size: .72rem; letter-spacing: .15em; text-transform: uppercase; color: var(--orange-light); font-weight: 500; margin-bottom: .4rem; }
+    h1 { font-family: 'Outfit', sans-serif; font-size: clamp(1.8rem,4vw,2.6rem); font-weight: 600; color: var(--orange); }
+    .subtitle { font-size: .9rem; color: var(--text-soft); margin-top: .4rem; font-weight: 300; }
+
+    .week-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; padding: 1rem 1.5rem .5rem; }
+    .nav-btn { background: #DBEAFE; border: 1px solid #93C5FD; border-radius: 8px; padding: .45rem 1.1rem; cursor: pointer; font-family: 'Outfit', sans-serif; font-size: .82rem; font-weight: 500; color: #1E40AF; transition: background .15s; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+    .nav-btn:hover { background: #BFDBFE; border-color: #60A5FA; }
+    .today-btn { background: #FDE8D8; border-color: #F99152; color: #C4540F; }
+    .today-btn:hover { background: #FBCFAA; border-color: var(--orange); }
+    .week-label { font-size: .9rem; font-weight: 600; min-width: 220px; text-align: center; color: #FFFFFF; }
+
+    .status-bar { text-align: center; font-size: .78rem; color: #9A9A9A; padding: .4rem 1rem .8rem; min-height: 2rem; }
+    .status-bar.error { color: #c0392b; }
+
+    .grid-wrapper { overflow-x: auto; padding: 0 1rem 2rem; -webkit-overflow-scrolling: touch; }
+    .grid {
+      display: grid;
+      grid-template-columns: 52px repeat(14, 1fr); /* overridden by JS */
+      min-width: 900px; max-width: 1400px;
+      margin: 0 auto;
+      border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+      background: var(--surface); box-shadow: var(--shadow);
+    }
+    .col-header { padding: .6rem .3rem; text-align: center; background: var(--surface); border-bottom: 1px solid var(--border); font-size: .72rem; font-weight: 600; color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; line-height: 1.5; }
+    .col-header.today { color: var(--orange); background: #FDE8D8; }
+    .col-header.corner { border-right: 1px solid var(--border); }
+
+    .time-label { padding: 0 .5rem; display: flex; align-items: center; justify-content: flex-end; font-size: .65rem; color: var(--text-soft); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); white-space: nowrap; user-select: none; }
+    .time-label.half { color: transparent; border-bottom-style: dotted; }
+
+    .cell { height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); transition: background .1s; }
+    button.cell { all: unset; height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: block; width: 100%; cursor: pointer; }
+    .cell:last-child { border-right: none; }
+    .cell.half-hour { border-bottom-style: dotted; }
+    .cell.available { background: var(--orange-pale); cursor: pointer; position: relative; }
+    .cell.available:hover { background: var(--orange); }
+    .cell.available:hover::after { content: attr(data-time); position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 9px; font-weight: 600; color: #FFFFFF; white-space: nowrap; pointer-events: none; font-family: 'Outfit',sans-serif; }
+    .cell.busy    { background: var(--busy); cursor: default; }
+    .cell.past    { background: var(--past); opacity: .55; cursor: default; }
+    .cell.loading { background: linear-gradient(90deg,#EEEAE5 25%,#F5F2EE 50%,#EEEAE5 75%); background-size: 300% 100%; animation: shimmer 1.6s infinite linear; }
+
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+    .legend { display: flex; gap: 1.2rem; justify-content: center; flex-wrap: wrap; padding: .75rem 1rem 1.5rem; font-size: .78rem; color: #9A9A9A; font-weight: 300; }
+    .legend-item { display: flex; align-items: center; gap: .4rem; }
+    .legend-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.08); }
+
+    /* Modal */
+    .overlay { position: fixed; inset: 0; background: rgba(20,35,20,.45); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: 200; padding: 1rem; }
+    .overlay.open { display: flex; }
+    .modal { background: var(--surface); border-radius: 18px; padding: 2rem; width: 100%; max-width: 400px; box-shadow: 0 24px 72px rgba(0,0,0,.18); animation: slideUp .2s ease; }
+    @keyframes slideUp { from{transform:translateY(16px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .modal-eyebrow { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--orange-light); font-weight: 600; margin-bottom: .3rem; }
+    .modal h2 { font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 600; color: var(--orange); line-height: 1.25; margin-bottom: .25rem; }
+    .slot-display { font-size: .88rem; color: var(--text-soft); padding-bottom: 1.2rem; margin-bottom: 1.2rem; border-bottom: 1px solid var(--border); font-weight: 300; }
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: .72rem; font-weight: 600; color: var(--text-soft); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .35rem; }
+    .field input, .field select { width: 100%; padding: .62rem .85rem; border: 1px solid #D8D8D8 !important; border-radius: 9px; font-family: 'Outfit', sans-serif; font-size: .9rem; color: #1A1A1A !important; background: #FFFFFF !important; -webkit-appearance: none; -webkit-text-fill-color: #1A1A1A !important; }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--orange) !important; }
+    .field input:-webkit-autofill, .field input:-webkit-autofill:hover, .field input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0px 1000px #FFFFFF inset !important; -webkit-text-fill-color: #1A1A1A !important; }
+    .modal-actions { display: flex; gap: .75rem; margin-top: 1.5rem; }
+    .btn-cancel { padding: .72rem 1.2rem; background: none; border: 1px solid var(--border); border-radius: 9px; font-family: 'Outfit', sans-serif; font-size: .88rem; color: var(--text-soft); cursor: pointer; }
+    .btn-cancel:hover { background: var(--bg); }
+    .btn-download { flex: 1; padding: .72rem; background: var(--orange); color: white; border: none; border-radius: 9px; font-family: 'Outfit', sans-serif; font-size: .88rem; font-weight: 600; cursor: pointer; }
+    .btn-download:hover { background: var(--orange-hover); }
+    .download-note { font-size: .72rem; color: var(--text-soft); text-align: center; margin-top: .75rem; font-weight: 300; }
+
+    /* ── MOBILE ── */
+    @media (max-width: 767px) {
+      .grid {
+        min-width: unset !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      .grid-wrap { padding: 0 .4rem .75rem; overflow-x: hidden; }
+      .col-hdr { font-size: .58rem; padding: .35rem .1rem; letter-spacing: 0; }
+      .tlabel { font-size: .55rem; padding: 0 .2rem; }
+      .cell { height: 18px; }
+      .week-nav { gap: .4rem; flex-wrap: wrap; }
+      .nav-btn { padding: .35rem .6rem; font-size: .75rem; }
+      .week-label { font-size: .78rem; min-width: unset; width: 100%; order: -1; text-align: center; }
+      h1 { font-size: 1.4rem; }
+      .subtitle { font-size: .78rem; }
+      .header { padding: 1rem .75rem .75rem; }
+      .modal { padding: 1.25rem; width: 95%; }
+      .location-wrap { flex-direction: column; }
+      #mapPreview { width: 100% !important; height: 120px; }
+    }
+
+    #slot-popover {
+      position: fixed;
+      background: #2A2A2A;
+      color: #E8E8E8;
+      border: 1px solid var(--orange);
+      border-radius: 8px;
+      padding: 6px 10px 6px 12px;
+      font-size: 13px;
+      font-family: 'Outfit', sans-serif;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 500;
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #slot-popover::before {
+      content: '';
+      position: absolute;
+      left: -6px; top: 50%;
+      transform: translateY(-50%);
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      border-right: 6px solid var(--orange);
+    }
+    #slot-popover .pop-confirm {
+      width: 26px; height: 26px;
+      background: var(--orange);
+      border: none; border-radius: 5px;
+      color: white; font-size: 15px;
+      cursor: pointer; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Family Availability</p>
+  <h1>Kooi Family</h1>
+  <p class="subtitle">Choose an open time to schedule a get-together</p>
+</header>
+
+<div class="week-nav">
+  <button class="nav-btn" onclick="changeWeek(-1)">&#8592; Last Week</button>
+  <div class="week-label" id="weekLabel"></div>
+  <button class="nav-btn today-btn" onclick="goToToday()">Today</button>
+  <button class="nav-btn" onclick="changeWeek(1)">Next Week &#8594;</button>
+</div>
+<p class="status-bar" id="statusBar">Loading calendars&hellip;</p>
+
+<div class="grid-wrapper">
+  <div class="grid" id="calGrid"></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--orange-pale)"></div> Available — click to schedule</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:var(--busy)"></div> Busy</div>
+</div>
+
+<div class="overlay" id="overlay" onclick="handleOverlayClick(event)">
+  <div class="modal" id="modal">
+    <p class="modal-eyebrow">Schedule a Get-Together</p>
+    <h2>Time with the Kooi Family</h2>
+    <div class="slot-display" id="slotDisplay"></div>
+    <div class="field">
+      <label>Your Name / Family</label>
+      <input type="text" id="guestName" placeholder="e.g. The Henderson Family">
+    </div>
+    <div class="field">
+      <label>Duration</label>
+      <select id="duration">
+        <option value="30">30 minutes</option>
+        <option value="60" selected>1 hour</option>
+        <option value="90">1.5 hours</option>
+        <option value="120">2 hours</option>
+        <option value="180">3 hours</option>
+        <option value="240">4 hours</option>
+        <option value="480">All day</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Location (optional)</label>
+      <div class="location-wrap">
+        <div class="location-input-col">
+          <input type="text" id="locationField" placeholder="e.g. 123 Main St, Powell, OH" autocomplete="off">
+        </div>
+        <div id="mapPreview"><iframe id="mapIframe" src=""></iframe></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Your Email</label>
+      <input type="email" id="guestEmail" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <input type="text" id="noteField" placeholder="e.g. Backyard cookout, kids welcome">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-download" onclick="downloadInvite()">Send Invite</button>
+    </div>
+    <p class="download-note">Sends a calendar invite from kooi.bernie@gmail.com to you and the Kooi family</p>
+  </div>
+</div>
+
+<script id="mapsScript"></script>
+<script>
+// ── CONFIG ─────────────────────────────────────────────────────────────────
+const FAMILY_NAME  = 'Kooi Family';
+
+// ── GOOGLE MAPS CONFIG ─────────────────────────────────────────────────────
+// Get a free key at console.cloud.google.com — enable Maps JS API + Places API
+const MAPS_API_KEY = 'AIzaSyCxBrX0-i6yXmDcelfkSRosCGqGBUxyn6U';
+
+// ── EMAIL CONFIG ───────────────────────────────────────────────────────────
+// Paste your Google Apps Script web app URL here after deploying
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgdqcDQgvTXeR0YVSd3uC8mnT37ky4zmePcsLF9BsbvaV6TdoD5AIzCMr-kCYGpaOTAQ/exec';
+const KOOI_EMAIL        = 'kooi.bernie@gmail.com';
+const SCRIPT_TOKEN      = 'kooi2026scheduler';
+const MINS_START   = 8  * 60;   // 8:00 AM
+const MINS_END     = 22 * 60;   // 10:00 PM
+const SCHOOL_START = 8  * 60;   // block from 8 AM
+const SCHOOL_END   = 16 * 60;   // block until 4 PM
+
+const FEED_NAMES = ['kooi-family', 'kooi-ohio', 'drem-soccer', 'sofie-volleyball'];
+
+
+// ── SCHOOL CALENDAR ────────────────────────────────────────────────────────
+// Big Walnut Local Schools 2025-26 and 2026-27
+const SCHOOL_YEARS = [
+  { start: new Date(2025,7,13), end: new Date(2026,4,21) },
+  { start: new Date(2026,7,20), end: new Date(2027,4,27) },
+];
+
+// All non-weekend no-school dates (holidays, breaks, teacher workdays)
+const NO_SCHOOL = new Set([
+  // 2025-2026
+  '2025-9-1',                                          // Labor Day
+  '2025-9-15',                                         // Prof Dev / Fair Day
+  '2025-10-17',                                        // Conf comp day
+  '2025-11-26','2025-11-27','2025-11-28',              // Thanksgiving break
+  '2025-12-1',                                         // Prof Dev Day
+  '2025-12-22','2025-12-23','2025-12-24','2025-12-25', // Winter break
+  '2025-12-26','2025-12-29','2025-12-30','2025-12-31',
+  '2026-1-1','2026-1-2',                               // Winter break cont.
+  '2026-1-19',                                         // MLK Day
+  '2026-2-16',                                         // Presidents Day
+  '2026-3-30','2026-3-31','2026-4-1','2026-4-2','2026-4-3', // Spring break
+  '2026-4-6',                                          // Conf comp day
+  // 2026-2027
+  '2026-9-7',                                          // Labor Day
+  '2026-9-21',                                         // Prof Dev Day
+  '2026-10-16',                                        // Teacher workday
+  '2026-11-25','2026-11-26','2026-11-27',              // Thanksgiving
+  '2026-11-30',                                        // Prof Dev Day
+  '2026-12-21','2026-12-22','2026-12-23','2026-12-24', // Winter break
+  '2026-12-25','2026-12-28','2026-12-29','2026-12-30','2026-12-31',
+  '2027-1-1','2027-1-2','2027-1-4',                   // Winter break cont.
+  '2027-1-18',                                         // MLK Day
+  '2027-2-15',                                         // Presidents Day
+  '2027-3-26',                                         // Conf exchange day
+  '2027-3-29','2027-3-30','2027-3-31','2027-4-1','2027-4-2', // Spring break
+]);
+
+function isSchoolDay(date) {
+  const dow = date.getDay();
+  if (dow === 0 || dow === 6) return false;
+  const d0 = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const inYear = SCHOOL_YEARS.some(yr => d0 >= yr.start && d0 <= yr.end);
+  if (!inYear) return false;
+  const key = `${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`;
+  return !NO_SCHOOL.has(key);
+}
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let weekOffset   = 0;
+let allEvents    = [];
+let loading      = true;
+let selectedSlot = null; // { date, mins }
+
+// ── ICS PARSER ────────────────────────────────────────────────────────────
+function parseICS(raw) {
+  const text = raw.replace(/\r\n[ \t]/g,'').replace(/\r\n|\r|\n/g,'\n').replace(/\n[ \t]/g,'\n');
+  const lines = text.split('\n');
+  const events = [];
+  let inEvent = false, ev = {};
+  for (const line of lines) {
+    const l = line.trim();
+    if (l === 'BEGIN:VEVENT')  { inEvent = true; ev = {}; continue; }
+    if (l === 'END:VEVENT')    { inEvent = false; if (ev.start) events.push(ev); continue; }
+    if (!inEvent) continue;
+    const sep = l.indexOf(':');
+    if (sep < 0) continue;
+    const key = l.slice(0, sep).toUpperCase();
+    const val = l.slice(sep + 1);
+    if (key.startsWith('DTSTART'))  ev.start = parseDate(key, val);
+    if (key.startsWith('DTEND'))    ev.end   = parseDate(key, val);
+    if (key.startsWith('DURATION') && ev.start && !ev.end) ev.end = addDuration(ev.start, val);
+  }
+  return events;
+}
+
+function parseDate(key, val) {
+  if (key.includes('VALUE=DATE') || /^\d{8}$/.test(val))
+    return new Date(+val.slice(0,4), +val.slice(4,6)-1, +val.slice(6,8));
+  const d = val.replace(/[TZ]/g,'');
+  const y=+d.slice(0,4), mo=+d.slice(4,6)-1, dy=+d.slice(6,8);
+  const h=d.length>=10?+d.slice(8,10):0, mi=d.length>=12?+d.slice(10,12):0, s=d.length>=14?+d.slice(12,14):0;
+  if (val.endsWith('Z')) return new Date(Date.UTC(y,mo,dy,h,mi,s));
+  return new Date(y,mo,dy,h,mi,s);
+}
+
+function addDuration(start, dur) {
+  const days=+(dur.match(/(\d+)D/)||[0,0])[1];
+  const hrs =+(dur.match(/(\d+)H/)||[0,0])[1];
+  const mins=+(dur.match(/(\d+)M/)||[0,0])[1];
+  return new Date(start.getTime() + days*86400000 + hrs*3600000 + mins*60000);
+}
+
+async function loadAll() {
+  setStatus('Loading calendars…');
+  try {
+    const url = GOOGLE_SCRIPT_URL + '?action=feeds&token=' + encodeURIComponent(SCRIPT_TOKEN);
+    const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Feed error');
+    const failed = [];
+    allEvents = [];
+    for (const name of FEED_NAMES) {
+      if (data.feeds[name]) {
+        try { allEvents.push(...parseICS(data.feeds[name])); }
+        catch(e) { failed.push(name); }
+      } else { failed.push(name); }
+    }
+    loading = false;
+    if (!failed.length)  setStatus('✓ All calendars loaded');
+    else if (failed.length < FEED_NAMES.length) setStatus('Loaded ' + (FEED_NAMES.length - failed.length) + ' of ' + FEED_NAMES.length + ' — Failed: ' + failed.join(', '), true);
+    else setStatus('⚠ Could not load calendars', true);
+  } catch(err) {
+    loading = false;
+    setStatus('⚠ Could not load calendars — ' + err.message, true);
+    console.warn('loadAll error:', err);
+  }
+  renderGrid();
+}
+
+
+// ── BUSY CHECK ────────────────────────────────────────────────────────────
+function slotStatus(date, startMins) {
+  if (isSchoolDay(date) && startMins >= SCHOOL_START && startMins < SCHOOL_END) return 'busy';
+  const s = new Date(date); s.setHours(Math.floor(startMins/60), startMins%60, 0, 0);
+  const e = new Date(date); e.setHours(Math.floor((startMins+30)/60), (startMins+30)%60, 0, 0);
+  const busy = allEvents.some(ev => ev.start && ev.end && ev.start < e && ev.end > s);
+  return busy ? 'busy' : 'available';
+}
+
+function getMaxDuration(date, startMins) {
+  let maxMins = 30;
+  for (let m = startMins + 30; m < MINS_END; m += 30) {
+    if (slotStatus(date, m) !== 'available') break;
+    maxMins += 30;
+  }
+  return maxMins;
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+function getWeekStart() {
+  const d = new Date();
+  const dow = d.getDay() === 0 ? 6 : d.getDay() - 1;
+  d.setDate(d.getDate() - dow + weekOffset * 7);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+const DAYS  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS_LONG   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function fmtSlot(mins) {
+  const h  = Math.floor(mins / 60);
+  const m  = mins % 60;
+  const ap = h < 12 ? 'am' : 'pm';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return m === 0 ? `${h12}${ap}` : `${h12}:30`;
+}
+
+function fmtWeekRange(start, numDays) {
+  const end = new Date(start); end.setDate(end.getDate() + (numDays - 1));
+  return `${MONTHS[start.getMonth()]} ${start.getDate()} \u2013 ${MONTHS[end.getMonth()]} ${end.getDate()}, ${end.getFullYear()}`;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+function isMobileWidth() { return window.innerWidth < 768; }
+
+function renderGrid() {
+  const numDays = isMobileWidth() ? 7 : 14;
+  const grid  = document.getElementById('calGrid');
+  const start = getWeekStart();
+  const now   = new Date();
+  document.getElementById('weekLabel').textContent = fmtWeekRange(start, numDays);
+
+  // Set grid columns dynamically
+  document.getElementById('calGrid').style.gridTemplateColumns = `36px repeat(${numDays}, 1fr)`;
+
+  let html = `<div class="col-header corner"></div>`;
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    const today = d.toDateString() === now.toDateString();
+    const sep = i === 7 ? ' style="border-left:2px solid var(--border)"' : '';
+    html += `<div class="col-header${today ? ' today' : ''}"${sep}>${DAYS[i%7]}<br>${MONTHS[d.getMonth()]} ${d.getDate()}</div>`;
+  }
+
+  for (let mins = MINS_START; mins < MINS_END; mins += 30) {
+    const isHalf = mins % 60 !== 0;
+    html += `<div class="time-label${isHalf ? ' half' : ''}">${isHalf ? '' : fmtSlot(mins)}</div>`;
+    for (let i = 0; i < numDays; i++) {
+      const d = new Date(start); d.setDate(d.getDate() + i);
+      const slot = new Date(d); slot.setHours(Math.floor(mins/60), mins%60, 0, 0);
+      const buffer = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const past = slot < buffer;
+
+      let cls = 'cell' + (isHalf ? ' half-hour' : '');
+      let click = '';
+      let st = '';
+
+      if (loading)  { cls += ' loading'; }
+      else if (past){ cls += ' past'; }
+      else {
+        st = slotStatus(d, mins);
+        cls += ' ' + st;
+        if (st === 'available') click = `data-date="${d.toISOString()}" data-mins="${mins}" data-time="${fmtSlot(mins)}"`;
+      }
+      const sepStyle = i === 7 ? ' style="border-left:2px solid #C8C2BB"' : '';
+      if (st === 'available') {
+        html += `<button class="${cls}" ${click}${sepStyle} aria-label="Schedule ${fmtSlot(mins)}"></button>`;
+      } else {
+        html += `<div class="${cls}"${sepStyle}></div>`;
+      }
+    }
+  }
+  grid.innerHTML = html;
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────────
+function changeWeek(delta) { weekOffset += delta; renderGrid(); }
+function goToToday() { weekOffset = 0; renderGrid(); }
+
+
+// ── CELL INTERACTION ───────────────────────────────────────────────────────
+// Available cells are <button> elements — click fires natively on all iOS browsers
+let _popover = null;
+
+function dismissPopover() {
+  if (_popover) { _popover.remove(); _popover = null; }
+}
+
+function showPopover(cell, dateISO, mins, maxMins) {
+  if (_popover && _popover.dataset.slot === dateISO + mins) {
+    dismissPopover(); return;
+  }
+  dismissPopover();
+
+  const rect = cell.getBoundingClientRect();
+  const p = document.createElement('div');
+  p.id = 'slot-popover';
+  p.dataset.slot = dateISO + mins;
+  p.innerHTML = `<span>Schedule ${fmtSlot(mins)}?</span><button class="pop-confirm" id="popBtn">&#10003;</button>`;
+  document.body.appendChild(p);
+
+  document.getElementById('popBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    dismissPopover();
+    openModal(dateISO, mins, maxMins);
+  });
+
+  let left = rect.right + 8;
+  let top  = rect.top + window.scrollY - 4;
+  const pw = p.offsetWidth;
+  if (left + pw > window.innerWidth - 8) left = rect.left - pw - 8;
+  if (left < 8) left = 8;
+  p.style.left = left + 'px';
+  p.style.top  = top + 'px';
+  _popover = p;
+}
+
+// Delegated click on grid — works on desktop AND iOS because cells are <button>
+document.getElementById('calGrid').addEventListener('click', e => {
+  const cell = e.target.closest('button[data-date]');
+  if (!cell) return;
+  const dateISO = cell.dataset.date;
+  const mins    = parseInt(cell.dataset.mins);
+  const maxMins = getMaxDuration(new Date(dateISO), mins);
+  // Show popover on touch devices, open modal directly on desktop
+  const isTouch = window.matchMedia('(hover: none)').matches || navigator.maxTouchPoints > 0;
+  if (isTouch) {
+    showPopover(cell, dateISO, mins, maxMins);
+  } else {
+    openModal(dateISO, mins, maxMins);
+  }
+});
+
+// Dismiss on outside click
+document.addEventListener('click', e => {
+  if (_popover && !_popover.contains(e.target) && !e.target.closest('button[data-date]')) {
+    dismissPopover();
+  }
+});
+
+// ── MAPS / LOCATION ────────────────────────────────────────────────────────
+let _autocomplete = null;
+let _mapsLoaded   = false;
+
+function initMaps() {
+  if (_mapsLoaded || MAPS_API_KEY === 'YOUR_MAPS_API_KEY') return;
+  _mapsLoaded = true;
+  const s = document.getElementById('mapsScript');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=places&callback=onMapsReady`;
+}
+
+function onMapsReady() {
+  const input = document.getElementById('locationField');
+  if (!input) return;
+  _autocomplete = new google.maps.places.Autocomplete(input, { types: ['establishment', 'geocode'] });
+  _autocomplete.addListener('place_changed', () => {
+    const place = _autocomplete.getPlace();
+    if (!place.geometry) return;
+    const coords = place.geometry.location;
+    const mapDiv = document.getElementById('mapPreview');
+    const iframe = document.getElementById('mapIframe');
+    iframe.src = `https://www.google.com/maps/embed/v1/place?key=${MAPS_API_KEY}&q=${encodeURIComponent(place.formatted_address)}&zoom=15`;
+    mapDiv.classList.add('visible');
+  });
+  // Also show map on manual blur if text entered
+  input.addEventListener('blur', () => {
+    const val = input.value.trim();
+    if (!val || _autocomplete) return;
+    showMapForText(val);
+  });
+}
+
+function showMapForText(text) {
+  if (!text || MAPS_API_KEY === 'YOUR_MAPS_API_KEY') return;
+  const iframe = document.getElementById('mapIframe');
+  const mapDiv = document.getElementById('mapPreview');
+  iframe.src = `https://www.google.com/maps/embed/v1/place?key=${MAPS_API_KEY}&q=${encodeURIComponent(text)}&zoom=15`;
+  mapDiv.classList.add('visible');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────
+function openModal(dateISO, mins, maxMins) {
+  const d = new Date(dateISO); d.setHours(Math.floor(mins/60), mins%60, 0, 0);
+  selectedSlot = { date: d, mins };
+  document.getElementById('slotDisplay').textContent =
+    `${DAYS_LONG[d.getDay()]}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()} at ${fmtSlot(mins)}`;
+
+  // Build duration options based on available consecutive time
+  const allDurations = [
+    { mins: 30,  label: '30 minutes' },
+    { mins: 60,  label: '1 hour' },
+    { mins: 90,  label: '1.5 hours' },
+    { mins: 120, label: '2 hours' },
+    { mins: 180, label: '3 hours' },
+    { mins: 240, label: '4 hours' },
+    { mins: 480, label: 'All day' },
+  ];
+  const sel = document.getElementById('duration');
+  sel.innerHTML = allDurations
+    .filter(opt => opt.mins <= maxMins)
+    .map((opt, i) => `<option value="${opt.mins}"${i === 0 ? ' selected' : ''}>${opt.label}</option>`)
+    .join('');
+
+  document.getElementById('overlay').classList.add('open');
+  initMaps();
+  document.getElementById('locationField').value = '';
+  document.getElementById('mapPreview').classList.remove('visible');
+}
+
+function closeModal() {
+  document.getElementById('overlay').classList.remove('open');
+  selectedSlot = null;
+}
+
+function handleOverlayClick(e) { if (e.target.id === 'overlay') closeModal(); }
+
+// ── DOWNLOAD ICS ──────────────────────────────────────────────────────────
+function buildICS(name, start, end, note) {
+  const fmt = d => d.toISOString().replace(/[-:.]/g,'').slice(0,-1) + 'Z';
+  const uid = 'kooi-' + Date.now() + '@kooifamily';
+  return [
+    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Kooi Family Scheduler//EN','METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    'UID:' + uid,
+    'DTSTART:' + fmt(start),
+    'DTEND:' + fmt(end),
+    'SUMMARY:Get-together \u2014 Kooi Family',
+    'DESCRIPTION:Requested by ' + name + (note ? '\\n\\n' + note : ''),
+    'STATUS:TENTATIVE','END:VEVENT','END:VCALENDAR',
+  ].join('\r\n');
+}
+
+function downloadInvite() {
+  const name       = document.getElementById('guestName').value.trim() || 'Guest';
+  const guestEmail = document.getElementById('guestEmail').value.trim();
+  const durMins    = parseInt(document.getElementById('duration').value, 10);
+  const note       = document.getElementById('noteField').value.trim();
+  const start      = new Date(selectedSlot.date);
+  const end        = new Date(start.getTime() + durMins * 60000);
+  const ics        = buildICS(name, start, end, note);
+
+  // Send email via Google Apps Script
+  if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.startsWith('https://')) {
+    const slotText = document.getElementById('slotDisplay').textContent;
+    fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode:   'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token:       SCRIPT_TOKEN,
+        guest_name:  name,
+        guest_email: guestEmail,
+        kooi_email:  KOOI_EMAIL,
+        event_time:  slotText,
+        duration:    durMins + ' minutes',
+        note:        note || '',
+        location:    document.getElementById('locationField').value.trim(),
+        ics_content: ics,
+      }),
+    }).then(() => {
+      alert('Invite sent! Check your email for confirmation.');
+    }).catch(err => {
+      console.warn('Email error:', err);
+      alert('There was a problem sending the invite. Please try again.');
+    });
+  } else {
+    alert('Email service not configured.');
+  }
+
+  closeModal();
+}
+
+// ── STATUS ────────────────────────────────────────────────────────────────
+function setStatus(msg, isError=false) {
+  const el = document.getElementById('statusBar');
+  el.textContent = msg;
+  el.className = 'status-bar' + (isError ? ' error' : '');
+}
+
+// Re-render on resize so mobile/desktop switch works
+let _resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(renderGrid, 150);
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+renderGrid();
+loadAll();
+</script>
+</body>
+</html>
