@@ -444,11 +444,12 @@ function renderGrid() {
 
       let cls = 'cell' + (isHalf ? ' half-hour' : '');
       let click = '';
+      let st = '';
 
       if (loading)  { cls += ' loading'; }
       else if (past){ cls += ' past'; }
       else {
-        const st = slotStatus(d, mins);
+        st = slotStatus(d, mins);
         cls += ' ' + st;
         if (st === 'available') click = `data-date="${d.toISOString()}" data-mins="${mins}" data-time="${fmtSlot(mins)}"`;
       }
