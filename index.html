@@ -118,40 +118,8 @@
       #mapPreview { width: 100% !important; height: 120px; }
     }
 
-    #slot-popover {
-      position: fixed;
-      background: #2A2A2A;
-      color: #E8E8E8;
-      border: 1px solid var(--orange);
-      border-radius: 8px;
-      padding: 6px 10px 6px 12px;
-      font-size: 13px;
-      font-family: 'Outfit', sans-serif;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      z-index: 500;
-      white-space: nowrap;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    }
-    #slot-popover::before {
-      content: '';
-      position: absolute;
-      left: -6px; top: 50%;
-      transform: translateY(-50%);
-      border-top: 6px solid transparent;
-      border-bottom: 6px solid transparent;
-      border-right: 6px solid var(--orange);
-    }
-    #slot-popover .pop-confirm {
-      width: 26px; height: 26px;
-      background: var(--orange);
-      border: none; border-radius: 5px;
-      color: white; font-size: 15px;
-      cursor: pointer; font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
-      line-height: 1;
-    }
+    .cell.selecting { background: rgba(243,108,33,0.35) !important; }
+
   </style>
 </head>
 <body>
@@ -222,7 +190,7 @@
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
       <button class="btn-download" onclick="downloadInvite()">Send Invite</button>
     </div>
-    <p class="download-note">Sends a calendar invite from kooi.bernie@gmail.com to you and the Kooi family</p>
+    <p class="download-note">Sends a calendar invite from bernieandlizkooi@gmail.com to you and the Kooi family</p>
   </div>
 </div>
 
@@ -511,61 +479,121 @@ function changeWeek(delta) { weekOffset += delta; renderGrid(); }
 function goToToday() { weekOffset = 0; renderGrid(); }
 
 
-// ── CELL INTERACTION ───────────────────────────────────────────────────────
-// Both desktop and mobile: click shows popover, confirm opens modal
-let _popover = null;
+// ── DRAG-TO-SELECT ─────────────────────────────────────────────────────────
+let dragState = null;    // { date, dayIdx, startMins, endMins }
+let touchPending = null; // touchstart info before drag is committed
 
-function dismissPopover() {
-  if (_popover) { _popover.remove(); _popover = null; }
+function cellFromEl(el) {
+  const c = el && el.closest('button[data-date]');
+  if (!c) return null;
+  return { el: c, date: c.dataset.date, dayIdx: parseInt(c.dataset.day), mins: parseInt(c.dataset.mins) };
 }
 
-function showPopover(cell, dateISO, dayIdx, mins, maxMins) {
-  if (_popover && _popover.dataset.slot === dateISO + mins) {
-    dismissPopover(); return;
-  }
-  dismissPopover();
+function startDrag(cell) {
+  dragState = { date: cell.date, dayIdx: cell.dayIdx, startMins: cell.mins, endMins: cell.mins };
+  updateSelection();
+}
 
-  const rect = cell.getBoundingClientRect();
-  const p = document.createElement('div');
-  p.id = 'slot-popover';
-  p.dataset.slot = dateISO + mins;
-  p.innerHTML = `<span>Schedule ${fmtSlot(mins)}?</span><button class="pop-confirm" id="popBtn">&#10003;</button>`;
-  document.body.appendChild(p);
+function extendDrag(cell) {
+  if (!dragState || cell.dayIdx !== dragState.dayIdx) return;
+  dragState.endMins = cell.mins;
+  updateSelection();
+}
 
-  document.getElementById('popBtn').addEventListener('click', e => {
-    e.stopPropagation();
-    dismissPopover();
-    openModal(dateISO, mins, maxMins, null);
+function updateSelection() {
+  document.querySelectorAll('.cell.selecting').forEach(el => el.classList.remove('selecting'));
+  if (!dragState) return;
+  const lo = Math.min(dragState.startMins, dragState.endMins);
+  const hi = Math.max(dragState.startMins, dragState.endMins);
+  document.querySelectorAll(`button[data-day="${dragState.dayIdx}"]`).forEach(el => {
+    const m = parseInt(el.dataset.mins);
+    if (m >= lo && m <= hi) el.classList.add('selecting');
   });
-
-  let left = rect.right + 8;
-  let top  = rect.top - 4;
-  const pw = p.offsetWidth;
-  if (left + pw > window.innerWidth - 8) left = rect.left - pw - 8;
-  if (left < 8) left = 8;
-  p.style.left = left + 'px';
-  p.style.top  = top + 'px';
-  _popover = p;
 }
 
-// Single click handler for both desktop and mobile
-document.getElementById('calGrid').addEventListener('click', e => {
-  const cell = e.target.closest('button[data-date]');
-  if (!cell) { dismissPopover(); return; }
-  e.stopPropagation(); // prevent document click from immediately dismissing popover
-  const dateISO = cell.dataset.date;
-  const dayIdx  = parseInt(cell.dataset.day);
-  const mins    = parseInt(cell.dataset.mins);
-  const maxMins = getMaxDuration(new Date(dateISO), mins);
-  showPopover(cell, dateISO, dayIdx, mins, maxMins);
+function commitDrag() {
+  if (!dragState) return;
+  const lo = Math.min(dragState.startMins, dragState.endMins);
+  const hi = Math.max(dragState.startMins, dragState.endMins);
+  const selectedDur = hi - lo + 30;
+  document.querySelectorAll('.cell.selecting').forEach(el => el.classList.remove('selecting'));
+  const maxAvail = getMaxDuration(new Date(dragState.date), lo);
+  openModal(dragState.date, lo, maxAvail, selectedDur);
+  dragState = null;
+}
+
+function cancelDrag() {
+  document.querySelectorAll('.cell.selecting').forEach(el => el.classList.remove('selecting'));
+  dragState = null;
+  touchPending = null;
+}
+
+const grid = document.getElementById('calGrid');
+
+// ── DESKTOP (mouse) ──────────────────────────────────────────────────────
+grid.addEventListener('mousedown', e => {
+  const cell = cellFromEl(e.target);
+  if (!cell) return;
+  e.preventDefault();
+  startDrag(cell);
 });
 
-// Dismiss on outside click
-document.addEventListener('click', e => {
-  if (_popover && !_popover.contains(e.target) && !e.target.closest('button[data-date]')) {
-    dismissPopover();
-  }
+document.addEventListener('mousemove', e => {
+  if (!dragState) return;
+  const cell = cellFromEl(e.target);
+  if (cell) extendDrag(cell);
 });
+
+document.addEventListener('mouseup', e => {
+  if (!dragState) return;
+  commitDrag();
+});
+
+// ── MOBILE (touch) ───────────────────────────────────────────────────────
+grid.addEventListener('touchstart', e => {
+  const touch = e.touches[0];
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  const cell = cellFromEl(el);
+  if (!cell) return;
+  // Record pending touch — don't prevent default yet (allow scroll intent)
+  touchPending = { cell, x: touch.clientX, y: touch.clientY };
+}, { passive: true });
+
+grid.addEventListener('touchmove', e => {
+  const touch = e.touches[0];
+
+  if (!dragState && touchPending) {
+    const dx = Math.abs(touch.clientX - touchPending.x);
+    const dy = Math.abs(touch.clientY - touchPending.y);
+    // Commit to drag if moved enough; abort if clearly scrolling vertically
+    if (dy > 12 && dy > dx * 2) { touchPending = null; return; }
+    if (dx > 6 || dy > 6) { startDrag(touchPending.cell); touchPending = null; }
+  }
+
+  if (dragState) {
+    e.preventDefault();
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const cell = cellFromEl(el);
+    if (cell) extendDrag(cell);
+  }
+}, { passive: false });
+
+grid.addEventListener('touchend', e => {
+  if (dragState) {
+    e.preventDefault();
+    commitDrag();
+  } else if (touchPending) {
+    // Tap with no drag — treat as single 30-min selection
+    const cell = touchPending.cell;
+    touchPending = null;
+    const maxAvail = getMaxDuration(new Date(cell.date), cell.mins);
+    openModal(cell.date, cell.mins, maxAvail, 30);
+  }
+  touchPending = null;
+}, { passive: false });
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cancelDrag(); });
+
 
 // ── MAPS / LOCATION ────────────────────────────────────────────────────────
 let _autocomplete = null;
