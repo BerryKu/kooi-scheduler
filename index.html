@@ -53,12 +53,12 @@
     .col-header.corner { border-right: 1px solid var(--border); }
 
     .time-label { padding: 0 .5rem; display: flex; align-items: center; justify-content: flex-end; font-size: .65rem; color: var(--text-soft); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); white-space: nowrap; user-select: none; }
-    .time-label.half { color: transparent; border-bottom-style: dotted; }
+    .time-label.half { color: transparent; border-bottom-style: dashed; border-bottom-color: #CCCCCC; }
 
-    .cell { height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); transition: background .1s; }
-    button.cell { all: unset; height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: block; width: 100%; cursor: pointer; }
+    .cell { height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid #AAAAAA; transition: background .1s; }
+    button.cell { all: unset; height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid #AAAAAA; display: block; width: 100%; cursor: pointer; }
     .cell:last-child { border-right: none; }
-    .cell.half-hour { border-bottom-color: #E0E0E0; border-bottom-style: dotted; }
+    .cell.half-hour { border-bottom-color: #CCCCCC; border-bottom-style: dashed; }
     .cell.available { background: var(--orange-pale); cursor: pointer; position: relative; }
     .cell.available:hover { background: var(--orange); }
     .cell.available:hover::after { content: attr(data-time); position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 9px; font-weight: 600; color: #FFFFFF; white-space: nowrap; pointer-events: none; font-family: 'Outfit',sans-serif; display: none; }
