@@ -57,7 +57,7 @@
     .time-label:not(.half) { border-bottom-style: dashed; border-bottom-color: #CCCCCC; }
 
     .cell { height: 22px; border-right: 1px solid var(--border); border-bottom: 1px dashed #CCCCCC; transition: background .1s; }
-    button.cell { all: unset; height: 22px; border-right: 1px solid var(--border); border-bottom: 1px dashed #CCCCCC; display: block; width: 100%; cursor: pointer; }
+    button.cell { all: unset; box-sizing: border-box; height: 22px; border-right: 1px solid var(--border); border-bottom: 1px dashed #CCCCCC; display: block; width: 100%; cursor: pointer; }
     .cell:last-child { border-right: none; }
     .cell.half-hour { border-bottom-color: #AAAAAA; border-bottom-style: solid; }
     .cell.available { background: var(--orange-pale); cursor: pointer; position: relative; }
@@ -106,7 +106,7 @@
       .time-label { height: 28px; font-size: .55rem; }
       #calGrid { grid-template-columns: 52px repeat(7, 1fr) !important; }
       .cell { height: 28px; }
-      button.cell { height: 28px; }
+      button.cell { box-sizing: border-box; height: 28px; }
       .week-nav { gap: .4rem; flex-wrap: wrap; }
       .nav-btn { padding: .35rem .6rem; font-size: .75rem; }
       .week-label { font-size: .78rem; min-width: unset; width: 100%; order: -1; text-align: center; }
