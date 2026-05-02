@@ -119,6 +119,7 @@
     }
 
     .cell.selecting { background: rgba(243,108,33,0.35) !important; }
+    .cell.tap-start  { background: var(--orange) !important; }
 
   </style>
 </head>
@@ -481,7 +482,6 @@ function goToToday() { weekOffset = 0; renderGrid(); }
 
 // ── DRAG-TO-SELECT ─────────────────────────────────────────────────────────
 let dragState = null;    // { date, dayIdx, startMins, endMins }
-let touchPending = null; // touchstart info before drag is committed
 
 function cellFromEl(el) {
   const c = el && el.closest('button[data-date]');
@@ -549,47 +549,61 @@ document.addEventListener('mouseup', e => {
   commitDrag();
 });
 
-// ── MOBILE (touch) ───────────────────────────────────────────────────────
+// ── MOBILE (two-tap selection) ───────────────────────────────────────────
+let mobileTapState = null; // { date, dayIdx, startMins } after first tap
+let touchStartPos  = null;
+let _lastStatus    = '';
+
+function clearMobileTap() {
+  document.querySelectorAll('.tap-start').forEach(el => el.classList.remove('tap-start'));
+  mobileTapState = null;
+  if (_lastStatus) setStatus(_lastStatus);
+}
+
+function handleMobileTap(cell) {
+  if (!mobileTapState) {
+    // First tap — mark start
+    _lastStatus = document.getElementById('statusBar').textContent;
+    mobileTapState = { date: cell.date, dayIdx: cell.dayIdx, startMins: cell.mins };
+    cell.el.classList.add('tap-start');
+    setStatus('Tap the end time · tap elsewhere to cancel');
+  } else if (cell.date !== mobileTapState.date || cell.dayIdx !== mobileTapState.dayIdx) {
+    // Different column — reset to new start
+    clearMobileTap();
+    _lastStatus = document.getElementById('statusBar').textContent;
+    mobileTapState = { date: cell.date, dayIdx: cell.dayIdx, startMins: cell.mins };
+    cell.el.classList.add('tap-start');
+    setStatus('Tap the end time · tap elsewhere to cancel');
+  } else {
+    // Second tap same column — commit
+    const lo = Math.min(mobileTapState.startMins, cell.mins);
+    const hi = Math.max(mobileTapState.startMins, cell.mins);
+    const selectedDur = hi - lo + 30;
+    const maxAvail = getMaxDuration(new Date(cell.date), lo);
+    clearMobileTap();
+    openModal(cell.date, lo, maxAvail, selectedDur);
+  }
+}
+
 grid.addEventListener('touchstart', e => {
   const touch = e.touches[0];
-  const el = document.elementFromPoint(touch.clientX, touch.clientY);
-  const cell = cellFromEl(el);
-  if (!cell) return;
-  // Record pending touch — don't prevent default yet (allow scroll intent)
-  touchPending = { cell, x: touch.clientX, y: touch.clientY };
+  touchStartPos = { x: touch.clientX, y: touch.clientY };
 }, { passive: true });
 
-grid.addEventListener('touchmove', e => {
-  const touch = e.touches[0];
-
-  if (!dragState && touchPending) {
-    const dx = Math.abs(touch.clientX - touchPending.x);
-    const dy = Math.abs(touch.clientY - touchPending.y);
-    // Commit to drag if moved enough; abort if clearly scrolling vertically
-    if (dy > 12 && dy > dx * 2) { touchPending = null; return; }
-    if (dx > 6 || dy > 6) { startDrag(touchPending.cell); touchPending = null; }
-  }
-
-  if (dragState) {
-    e.preventDefault();
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const cell = cellFromEl(el);
-    if (cell) extendDrag(cell);
-  }
-}, { passive: false });
-
 grid.addEventListener('touchend', e => {
-  if (dragState) {
-    e.preventDefault();
-    commitDrag();
-  } else if (touchPending) {
-    // Tap with no drag — treat as single 30-min selection
-    const cell = touchPending.cell;
-    touchPending = null;
-    const maxAvail = getMaxDuration(new Date(cell.date), cell.mins);
-    openModal(cell.date, cell.mins, maxAvail, 30);
-  }
-  touchPending = null;
+  if (!touchStartPos) return;
+  const touch = e.changedTouches[0];
+  const dx = Math.abs(touch.clientX - touchStartPos.x);
+  const dy = Math.abs(touch.clientY - touchStartPos.y);
+  touchStartPos = null;
+  if (dx > 12 || dy > 12) return; // was a scroll — ignore
+
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  const cell = cellFromEl(el);
+  if (!cell) { clearMobileTap(); return; }
+
+  e.preventDefault(); // suppress ghost click
+  handleMobileTap(cell);
 }, { passive: false });
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') cancelDrag(); });
@@ -661,10 +675,11 @@ function openModal(dateISO, mins, maxMins, presetMins) {
     { mins: 480, label: 'All day' },
   ];
   const sel = document.getElementById('duration');
-  sel.innerHTML = allDurations
-    .filter(opt => opt.mins <= maxMins)
-    .map(opt => `<option value="${opt.mins}"${opt.mins === presetMins ? ' selected' : ''}>${opt.label}</option>`)
-    .join('');
+  const available = allDurations.filter(opt => opt.mins <= maxMins);
+  sel.innerHTML = available.map(opt => `<option value="${opt.mins}">${opt.label}</option>`).join('');
+  const target = presetMins || 60;
+  const best = available.reduce((a, b) => Math.abs(b.mins - target) < Math.abs(a.mins - target) ? b : a, available[0]);
+  sel.value = String(best.mins);
 
   document.getElementById('overlay').classList.add('open');
   initMaps();
