@@ -233,8 +233,8 @@ const MAPS_API_KEY = 'AIzaSyCxBrX0-i6yXmDcelfkSRosCGqGBUxyn6U';
 
 // ── EMAIL CONFIG ───────────────────────────────────────────────────────────
 // Paste your Google Apps Script web app URL here after deploying
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgdqcDQgvTXeR0YVSd3uC8mnT37ky4zmePcsLF9BsbvaV6TdoD5AIzCMr-kCYGpaOTAQ/exec';
-const KOOI_EMAIL        = 'kooi.bernie@gmail.com';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyMSvVKQdj3BkCW2HuGcW0IVo4IA73zwecpXgkkVL01C98ezMZ181uSveZqbqiRJmlJMg/exec';
+const KOOI_EMAIL        = 'bernieandlizkooi@gmail.com';
 const SCRIPT_TOKEN      = 'kooi2026scheduler';
 const MINS_START   = 8  * 60;   // 8:00 AM
 const MINS_END     = 22 * 60;   // 10:00 PM
@@ -669,33 +669,52 @@ function downloadInvite() {
   const end        = new Date(start.getTime() + durMins * 60000);
   const ics        = buildICS(name, start, end, note);
 
-  // Send email via Google Apps Script
-  if (GOOGLE_SCRIPT_URL && GOOGLE_SCRIPT_URL.startsWith('https://')) {
-    const slotText = document.getElementById('slotDisplay').textContent;
-    fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      mode:   'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token:       SCRIPT_TOKEN,
-        guest_name:  name,
-        guest_email: guestEmail,
-        kooi_email:  KOOI_EMAIL,
-        event_time:  slotText,
-        duration:    durMins + ' minutes',
-        note:        note || '',
-        location:    document.getElementById('locationField').value.trim(),
-        ics_content: ics,
-      }),
-    }).then(() => {
-      alert('Invite sent! Check your email for confirmation.');
-    }).catch(err => {
-      console.warn('Email error:', err);
-      alert('There was a problem sending the invite. Please try again.');
-    });
-  } else {
+  if (!GOOGLE_SCRIPT_URL || !GOOGLE_SCRIPT_URL.startsWith('https://')) {
     alert('Email service not configured.');
+    closeModal();
+    return;
   }
+
+  const slotText  = document.getElementById('slotDisplay').textContent;
+  const location  = document.getElementById('locationField').value.trim();
+  const hasEmail  = guestEmail && guestEmail.indexOf('@') > -1;
+
+  // Use live calendar event if guest email provided, else fall back to ICS email
+  const payload = hasEmail ? {
+    action:        'create_event',
+    token:         SCRIPT_TOKEN,
+    guest_name:    name,
+    guest_email:   guestEmail,
+    kooi_email:    KOOI_EMAIL,
+    start_iso:     selectedSlot.date.toISOString(),
+    duration_mins: durMins,
+    note:          note || '',
+    location:      location,
+  } : {
+    token:         SCRIPT_TOKEN,
+    guest_name:    name,
+    guest_email:   '',
+    kooi_email:    KOOI_EMAIL,
+    event_time:    slotText,
+    duration_mins: durMins,
+    note:          note || '',
+    location:      location,
+    ics_content:   ics,
+  };
+
+  fetch(GOOGLE_SCRIPT_URL, {
+    method:  'POST',
+    mode:    'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload),
+  }).then(() => {
+    alert(hasEmail
+      ? 'Calendar invite sent! Both parties will receive a Google Calendar invite.'
+      : 'Invite sent to ' + KOOI_EMAIL + '.');
+  }).catch(err => {
+    console.warn('Send error:', err);
+    alert('There was a problem sending the invite. Please try again.');
+  });
 
   closeModal();
 }
