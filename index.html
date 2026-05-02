@@ -48,17 +48,18 @@
       border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
       background: var(--surface); box-shadow: var(--shadow);
     }
-    .col-header { padding: .6rem .3rem; text-align: center; background: var(--surface); border-bottom: 1px solid var(--border); font-size: .72rem; font-weight: 600; color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; line-height: 1.5; }
+    .col-header { padding: .6rem .3rem; text-align: center; background: var(--surface); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); font-size: .72rem; font-weight: 600; color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; line-height: 1.5; }
     .col-header.today { color: var(--orange); background: #FDE8D8; }
     .col-header.corner { border-right: 1px solid var(--border); }
 
     .time-label { padding: 0 .5rem; display: flex; align-items: center; justify-content: flex-end; font-size: .65rem; color: var(--text-soft); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); white-space: nowrap; user-select: none; }
-    .time-label.half { color: transparent; border-bottom-style: dashed; border-bottom-color: #CCCCCC; }
+    .time-label.half { border-bottom-style: solid; border-bottom-color: #AAAAAA; }
+    .time-label:not(.half) { border-bottom-style: dashed; border-bottom-color: #CCCCCC; }
 
-    .cell { height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid #AAAAAA; transition: background .1s; }
-    button.cell { all: unset; height: 22px; border-right: 1px solid var(--border); border-bottom: 1px solid #AAAAAA; display: block; width: 100%; cursor: pointer; }
+    .cell { height: 22px; border-right: 1px solid var(--border); border-bottom: 1px dashed #CCCCCC; transition: background .1s; }
+    button.cell { all: unset; height: 22px; border-right: 1px solid var(--border); border-bottom: 1px dashed #CCCCCC; display: block; width: 100%; cursor: pointer; }
     .cell:last-child { border-right: none; }
-    .cell.half-hour { border-bottom-color: #CCCCCC; border-bottom-style: dashed; }
+    .cell.half-hour { border-bottom-color: #AAAAAA; border-bottom-style: solid; }
     .cell.available { background: var(--orange-pale); cursor: pointer; position: relative; }
     .cell.available:hover { background: var(--orange); }
     .cell.available:hover::after { content: attr(data-time); position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 9px; font-weight: 600; color: #FFFFFF; white-space: nowrap; pointer-events: none; font-family: 'Outfit',sans-serif; display: none; }
@@ -102,7 +103,8 @@
       .grid-wrap { padding: 0 .4rem .75rem; overflow-x: hidden; }
       .col-hdr { font-size: .58rem; padding: .35rem .1rem; letter-spacing: 0; }
       .tlabel { font-size: .55rem; padding: 0 .2rem; }
-      .time-label { height: 28px; font-size: .6rem; }
+      .time-label { height: 28px; font-size: .55rem; }
+      #calGrid { grid-template-columns: 52px repeat(7, 1fr) !important; }
       .cell { height: 28px; }
       button.cell { height: 28px; }
       .week-nav { gap: .4rem; flex-wrap: wrap; }
@@ -247,7 +249,7 @@ const MAPS_API_KEY = 'AIzaSyCxBrX0-i6yXmDcelfkSRosCGqGBUxyn6U';
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyMSvVKQdj3BkCW2HuGcW0IVo4IA73zwecpXgkkVL01C98ezMZ181uSveZqbqiRJmlJMg/exec';
 const KOOI_EMAIL        = 'bernieandlizkooi@gmail.com';
 const SCRIPT_TOKEN      = 'kooi2026scheduler';
-const MINS_START   = 8  * 60;   // 8:00 AM
+const MINS_START   = 10 * 60;   // 10:00 AM
 const MINS_END     = 22 * 60;   // 10:00 PM
 const SCHOOL_START = 8  * 60;   // block from 8 AM
 const SCHOOL_END   = 16 * 60;   // block until 4 PM
@@ -428,8 +430,7 @@ function getMaxDuration(date, startMins) {
 // ── HELPERS ───────────────────────────────────────────────────────────────
 function getWeekStart() {
   const d = new Date();
-  const dow = d.getDay() === 0 ? 6 : d.getDay() - 1;
-  d.setDate(d.getDate() - dow + weekOffset * 7);
+  d.setDate(d.getDate() + weekOffset * 7);
   d.setHours(0,0,0,0);
   return d;
 }
@@ -444,7 +445,7 @@ function fmtSlot(mins) {
   const m  = mins % 60;
   const ap = h < 12 ? 'am' : 'pm';
   const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return m === 0 ? `${h12}${ap}` : `${h12}:30`;
+  return `${h12}:${m === 0 ? '00' : '30'}${ap}`;
 }
 
 function fmtWeekRange(start, numDays) {
@@ -463,19 +464,20 @@ function renderGrid() {
   document.getElementById('weekLabel').textContent = fmtWeekRange(start, numDays);
 
   // Set grid columns dynamically
-  document.getElementById('calGrid').style.gridTemplateColumns = `36px repeat(${numDays}, 1fr)`;
+  document.getElementById('calGrid').style.gridTemplateColumns = `52px repeat(${numDays}, 1fr)`;
 
   let html = `<div class="col-header corner"></div>`;
   for (let i = 0; i < numDays; i++) {
     const d = new Date(start); d.setDate(d.getDate() + i);
     const today = d.toDateString() === now.toDateString();
-    const sep = i === 7 ? ' style="border-left:2px solid var(--border)"' : '';
-    html += `<div class="col-header${today ? ' today' : ''}"${sep}>${DAYS[i%7]}<br>${MONTHS[d.getMonth()]} ${d.getDate()}</div>`;
+    const dow = d.getDay();
+    const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow];
+    html += `<div class="col-header${today ? ' today' : ''}">${dayName}<br>${MONTHS[d.getMonth()]} ${d.getDate()}</div>`;
   }
 
   for (let mins = MINS_START; mins < MINS_END; mins += 30) {
     const isHalf = mins % 60 !== 0;
-    html += `<div class="time-label${isHalf ? ' half' : ''}">${isHalf ? '' : fmtSlot(mins)}</div>`;
+    html += `<div class="time-label${isHalf ? ' half' : ''}">${fmtSlot(mins)}</div>`;
     for (let i = 0; i < numDays; i++) {
       const d = new Date(start); d.setDate(d.getDate() + i);
       const slot = new Date(d); slot.setHours(Math.floor(mins/60), mins%60, 0, 0);
@@ -493,11 +495,11 @@ function renderGrid() {
         cls += ' ' + st;
         if (st === 'available') click = `data-date="${d.toISOString()}" data-mins="${mins}" data-day="${i}" data-time="${fmtSlot(mins)}"`;
       }
-      const sepStyle = i === 7 ? ' style="border-left:2px solid #C8C2BB"' : '';
+      const dow2 = d.getDay();
       if (st === 'available') {
-        html += `<button class="${cls}" ${click}${sepStyle} aria-label="Schedule ${fmtSlot(mins)}"></button>`;
+        html += `<button class="${cls}" ${click} aria-label="Schedule ${fmtSlot(mins)}"></button>`;
       } else {
-        html += `<div class="${cls}"${sepStyle}></div>`;
+        html += `<div class="${cls}"></div>`;
       }
     }
   }
