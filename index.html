@@ -227,6 +227,15 @@
 // ── CONFIG ─────────────────────────────────────────────────────────────────
 const FAMILY_NAME  = 'Kooi Family';
 
+const FEED_NAMES = ['kooi-family', 'kooi-ohio', 'drem-soccer', 'sofie-volleyball', 'kooi-social'];
+const FEED_LABELS = {
+  'kooi-family':      'Kooi Family',
+  'kooi-ohio':        'Kooi Ohio',
+  'drem-soccer':      'Drem Soccer',
+  'sofie-volleyball': 'Sofie Volleyball',
+  'kooi-social':      'Kooi Social',
+};
+
 // ── GOOGLE MAPS CONFIG ─────────────────────────────────────────────────────
 // Get a free key at console.cloud.google.com — enable Maps JS API + Places API
 const MAPS_API_KEY = 'AIzaSyCxBrX0-i6yXmDcelfkSRosCGqGBUxyn6U';
@@ -372,7 +381,7 @@ async function loadAll() {
 
     allEvents = [];
     const failed = [];
-    const feedNames = ['kooi-family', 'kooi-ohio', 'drem-soccer', 'sofie-volleyball'];
+    const feedNames = FEED_NAMES;
     for (const name of feedNames) {
       const slots = data.feeds[name];
       if (slots && slots.length > 0) {
@@ -388,10 +397,15 @@ async function loadAll() {
     }
 
     loading = false;
-    const loadedCount = feedNames.filter(n => data.feeds[n] && !data.errors?.[n]).length;
-    if (failed.length === 0)           setStatus('✓ All calendars loaded');
-    else if (failed.length < feedNames.length) setStatus('Loaded ' + (feedNames.length - failed.length) + ' of ' + feedNames.length + ' — Failed: ' + failed.join(', '), true);
-    else                               setStatus('⚠ Could not load calendars', true);
+    const loaded = FEED_NAMES.filter(n => data.feeds[n] && !(data.errors && data.errors[n]));
+    const failedNames = FEED_NAMES.filter(n => !data.feeds[n] || (data.errors && data.errors[n]));
+    if (failedNames.length === 0) {
+      setStatus('✓ All calendars loaded: ' + loaded.map(n => FEED_LABELS[n]).join(', '));
+    } else if (loaded.length > 0) {
+      setStatus('Loaded: ' + loaded.map(n => FEED_LABELS[n]).join(', ') + ' — Failed: ' + failedNames.map(n => FEED_LABELS[n]).join(', '), true);
+    } else {
+      setStatus('⚠ Could not load calendars', true);
+    }
 
   } catch(err) {
     loading = false;
