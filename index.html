@@ -80,10 +80,16 @@
     @keyframes slideUp { from{transform:translateY(16px);opacity:0} to{transform:translateY(0);opacity:1} }
     .modal-eyebrow { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--orange-light); font-weight: 600; margin-bottom: .3rem; }
     .modal h2 { font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 600; color: var(--orange); line-height: 1.25; margin-bottom: .25rem; }
-    .slot-display { font-size: .88rem; color: var(--text-soft); padding-bottom: 1.2rem; margin-bottom: 1.2rem; border-bottom: 1px solid var(--border); font-weight: 300; }
+    .modal-divider { border: none; border-top: 1px solid var(--border); margin: 0 0 .5rem; }
+    .slot-display { font-family: 'Outfit', sans-serif; font-size: .9rem; color: #1A1A1A; line-height: 1.5; padding: .2rem 0 .8rem; }
     .field { margin-bottom: 1rem; }
     .field label { display: block; font-size: .72rem; font-weight: 600; color: var(--text-soft); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .35rem; }
     .field input, .field select { width: 100%; padding: .62rem .85rem; border: 1px solid #D8D8D8 !important; border-radius: 9px; font-family: 'Outfit', sans-serif; font-size: .9rem; color: #1A1A1A !important; background: #FFFFFF !important; -webkit-appearance: none; -webkit-text-fill-color: #1A1A1A !important; }
+    .field input::placeholder { color: #B0B0B0; opacity: 1; }
+    .field input::-webkit-input-placeholder { color: #B0B0B0; }
+    .field input::-moz-placeholder { color: #B0B0B0; }
+    .field input { color: #B0B0B0 !important; -webkit-text-fill-color: #B0B0B0 !important; }
+    .field input.has-value { color: #1A1A1A !important; -webkit-text-fill-color: #1A1A1A !important; }
     .field input:focus, .field select:focus { outline: none; border-color: var(--orange) !important; }
     .field input:-webkit-autofill, .field input:-webkit-autofill:hover, .field input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0px 1000px #FFFFFF inset !important; -webkit-text-fill-color: #1A1A1A !important; }
     .modal-actions { display: flex; gap: .75rem; margin-top: 1.5rem; }
@@ -114,8 +120,6 @@
       .subtitle { font-size: .78rem; }
       .header { padding: 1rem .75rem .75rem; }
       .modal { padding: 1.25rem; width: 95%; }
-      .location-wrap { flex-direction: column; }
-      #mapPreview { width: 100% !important; height: 120px; }
     }
 
     .cell.selecting { background: rgba(243,108,33,0.35) !important; }
@@ -153,35 +157,19 @@
   <div class="modal" id="modal">
     <p class="modal-eyebrow">Schedule a Get-Together</p>
     <h2>Time with the Kooi Family</h2>
+    <hr class="modal-divider">
     <div class="slot-display" id="slotDisplay"></div>
     <div class="field">
       <label>Your Name / Family</label>
-      <input type="text" id="guestName" placeholder="e.g. The Henderson Family">
-    </div>
-    <div class="field">
-      <label>Duration</label>
-      <select id="duration">
-        <option value="30">30 minutes</option>
-        <option value="60" selected>1 hour</option>
-        <option value="90">1.5 hours</option>
-        <option value="120">2 hours</option>
-        <option value="180">3 hours</option>
-        <option value="240">4 hours</option>
-        <option value="480">All day</option>
-      </select>
+      <input type="text" id="guestName" placeholder="e.g. The Simpsons">
     </div>
     <div class="field">
       <label>Location</label>
-      <div class="location-wrap">
-        <div class="location-input-col">
-          <input type="text" id="locationField" placeholder="e.g. 123 Main St, Powell, OH" autocomplete="off">
-        </div>
-        <div id="mapPreview"><iframe id="mapIframe" src=""></iframe></div>
-      </div>
+      <input type="text" id="locationField" placeholder="e.g. 742 Evergreen Terrace">
     </div>
     <div class="field">
       <label>Your Email</label>
-      <input type="email" id="guestEmail" placeholder="you@example.com">
+      <input type="email" id="guestEmail" placeholder="e.g. Homer@simpsons.com">
     </div>
     <div class="field">
       <label>Note (optional)</label>
@@ -191,11 +179,10 @@
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
       <button class="btn-download" onclick="downloadInvite()">Send Invite</button>
     </div>
-    <p class="download-note">Sends a calendar invite from bernieandlizkooi@gmail.com to you and the Kooi family</p>
+    <p class="download-note">Sends a calendar invite to you and the Kooi family</p>
   </div>
 </div>
 
-<script id="mapsScript"></script>
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────────────
 const FAMILY_NAME  = 'Kooi Family';
@@ -208,10 +195,6 @@ const FEED_LABELS = {
   'sofie-volleyball': 'Sofie Volleyball',
   'kooi-social':      'Kooi Social',
 };
-
-// ── GOOGLE MAPS CONFIG ─────────────────────────────────────────────────────
-// Get a free key at console.cloud.google.com — enable Maps JS API + Places API
-const MAPS_API_KEY = 'AIzaSyCxBrX0-i6yXmDcelfkSRosCGqGBUxyn6U';
 
 // ── EMAIL CONFIG ───────────────────────────────────────────────────────────
 // Paste your Google Apps Script web app URL here after deploying
@@ -610,87 +593,44 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') cancelDrag()
 
 
 // ── MAPS / LOCATION ────────────────────────────────────────────────────────
-let _autocomplete = null;
-let _mapsLoaded   = false;
 
-function initMaps() {
-  if (_mapsLoaded || MAPS_API_KEY === 'YOUR_MAPS_API_KEY') return;
-  _mapsLoaded = true;
-  const s = document.getElementById('mapsScript');
-  s.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_API_KEY}&libraries=places&callback=onMapsReady`;
-}
-
-function onMapsReady() {
-  const input = document.getElementById('locationField');
-  if (!input) return;
-  _autocomplete = new google.maps.places.Autocomplete(input, { types: ['establishment', 'geocode'] });
-  _autocomplete.addListener('place_changed', () => {
-    const place = _autocomplete.getPlace();
-    if (!place.geometry) return;
-    const coords = place.geometry.location;
-    const mapDiv = document.getElementById('mapPreview');
-    const iframe = document.getElementById('mapIframe');
-    iframe.src = `https://www.google.com/maps/embed/v1/place?key=${MAPS_API_KEY}&q=${encodeURIComponent(place.formatted_address)}&zoom=15`;
-    mapDiv.classList.add('visible');
-  });
-  // Also show map on manual blur if text entered
-  input.addEventListener('blur', () => {
-    const val = input.value.trim();
-    if (!val || _autocomplete) return;
-    showMapForText(val);
-  });
-}
-
-function showMapForText(text) {
-  if (!text || MAPS_API_KEY === 'YOUR_MAPS_API_KEY') return;
-  const iframe = document.getElementById('mapIframe');
-  const mapDiv = document.getElementById('mapPreview');
-  iframe.src = `https://www.google.com/maps/embed/v1/place?key=${MAPS_API_KEY}&q=${encodeURIComponent(text)}&zoom=15`;
-  mapDiv.classList.add('visible');
-}
 
 // ── MODAL ─────────────────────────────────────────────────────────────────
 function openModal(dateISO, mins, maxMins, presetMins) {
   const d = new Date(dateISO); d.setHours(Math.floor(mins/60), mins%60, 0, 0);
-  selectedSlot = { date: d, mins };
+  const durMinsSelected = presetMins || 60;
+  selectedSlot = { date: d, mins, durMins: durMinsSelected };
 
   // Show time range if multi-slot selected
+  const dateLine = `${DAYS_LONG[d.getDay()]}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()}`;
   if (presetMins && presetMins > 30) {
     const endMins = mins + presetMins;
-    document.getElementById('slotDisplay').textContent =
-      `${DAYS_LONG[d.getDay()]}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()} — ${fmtSlot(mins)} to ${fmtSlot(endMins)}`;
+    document.getElementById('slotDisplay').innerHTML =
+      `${dateLine}<br>${fmtSlot(mins)} to ${fmtSlot(endMins)}`;
   } else {
-    document.getElementById('slotDisplay').textContent =
-      `${DAYS_LONG[d.getDay()]}, ${MONTHS_LONG[d.getMonth()]} ${d.getDate()} at ${fmtSlot(mins)}`;
+    document.getElementById('slotDisplay').innerHTML =
+      `${dateLine}<br>${fmtSlot(mins)}`;
   }
 
-  // Build duration options based on available consecutive time
-  const allDurations = [
-    { mins: 30,  label: '30 minutes' },
-    { mins: 60,  label: '1 hour' },
-    { mins: 90,  label: '1.5 hours' },
-    { mins: 120, label: '2 hours' },
-    { mins: 180, label: '3 hours' },
-    { mins: 240, label: '4 hours' },
-    { mins: 480, label: 'All day' },
-  ];
-  const sel = document.getElementById('duration');
-  const available = allDurations.filter(opt => opt.mins <= maxMins);
-  sel.innerHTML = available.map(opt => `<option value="${opt.mins}">${opt.label}</option>`).join('');
-  const target = presetMins || 60;
-  const best = available.reduce((a, b) => Math.abs(b.mins - target) < Math.abs(a.mins - target) ? b : a, available[0]);
-  sel.value = String(best.mins);
+
 
   document.getElementById('overlay').classList.add('open');
-  initMaps();
   document.getElementById('locationField').value = '';
-  document.getElementById('mapPreview').classList.remove('visible');
+  document.querySelectorAll('.field input').forEach(i => i.classList.remove('has-value'));
 }
 
 function closeModal() {
   document.getElementById('overlay').classList.remove('open');
   selectedSlot = null;
 }
+
+// Track filled state on all modal text inputs
+document.querySelectorAll('.field input').forEach(input => {
+  const update = () => input.classList.toggle('has-value', input.value.trim().length > 0);
+  input.addEventListener('input', update);
+  input.addEventListener('change', update);
+});
+
 
 function handleOverlayClick(e) { if (e.target.id === 'overlay') closeModal(); }
 
@@ -712,12 +652,28 @@ function buildICS(name, start, end, note) {
 
 function downloadInvite() {
   const name       = document.getElementById('guestName').value.trim() || 'Guest';
-  const guestEmail = document.getElementById('guestEmail').value.trim();
-  const durMins    = parseInt(document.getElementById('duration').value, 10);
+  const guestEmail = document.getElementById('guestEmail').value.trim().toLowerCase();
+  const durMins    = selectedSlot.durMins || 60;
   const note       = document.getElementById('noteField').value.trim();
   const start      = new Date(selectedSlot.date);
   const end        = new Date(start.getTime() + durMins * 60000);
   const ics        = buildICS(name, start, end, note);
+
+  // Validate email — must be present, look like an email, and not be the placeholder
+  const emailValid = guestEmail &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail) &&
+    guestEmail !== 'homer@simpsons.com';
+  if (!emailValid) {
+    const emailInput = document.getElementById('guestEmail');
+    emailInput.style.borderColor = 'var(--orange)';
+    emailInput.focus();
+    emailInput.placeholder = 'Please enter your real email address';
+    setTimeout(() => {
+      emailInput.style.borderColor = '';
+      emailInput.placeholder = 'e.g. Homer@simpsons.com';
+    }, 3000);
+    return;
+  }
 
   if (!GOOGLE_SCRIPT_URL || !GOOGLE_SCRIPT_URL.startsWith('https://')) {
     alert('Email service not configured.');
@@ -725,11 +681,9 @@ function downloadInvite() {
     return;
   }
 
-  const slotText  = document.getElementById('slotDisplay').textContent;
+  const slotText  = document.getElementById('slotDisplay').innerText.replace('\n', ' ');
   const location  = document.getElementById('locationField').value.trim();
-  const hasEmail  = guestEmail && guestEmail.indexOf('@') > -1;
-
-  // Use live calendar event if guest email provided, else fall back to ICS email
+  const hasEmail  = true; // already validated above
   const payload = hasEmail ? {
     action:        'create_event',
     token:         SCRIPT_TOKEN,
@@ -754,10 +708,16 @@ function downloadInvite() {
 
   fetch(GOOGLE_SCRIPT_URL, {
     method:  'POST',
-    mode:    'no-cors',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body:    JSON.stringify(payload),
-  }).then(() => {
+  }).then(async resp => {
+    let result;
+    try { result = await resp.json(); } catch(e) { result = null; }
+    if (!resp.ok || !result || result.status !== 'ok') {
+      console.error('Invite failed:', result);
+      alert('There was a problem sending the invite: ' + (result && result.message ? result.message : 'unknown error') + '\n\nPlease try again or contact ' + KOOI_EMAIL + ' directly.');
+      return;
+    }
     alert(hasEmail
       ? 'Calendar invite sent! Both parties will receive a Google Calendar invite.'
       : 'Invite sent to ' + KOOI_EMAIL + '.');
@@ -787,5 +747,6 @@ window.addEventListener('resize', () => {
 renderGrid();
 loadAll();
 </script>
+
 </body>
 </html>
