@@ -111,6 +111,7 @@
       .tlabel { font-size: .55rem; padding: 0 .2rem; }
       .time-label { height: 28px; font-size: .55rem; }
       #calGrid { grid-template-columns: 52px repeat(7, 1fr) !important; }
+      /* mobile shows first 7 of the 14-day window */
       .cell { height: 28px; }
       button.cell { box-sizing: border-box; height: 28px; }
       .week-nav { gap: .4rem; flex-wrap: wrap; }
@@ -136,10 +137,10 @@
 </header>
 
 <div class="week-nav">
-  <button class="nav-btn" onclick="changeWeek(-1)">&#8592; Last Week</button>
+  <button class="nav-btn" onclick="changeWeek(-1)">&#8592; Prev 2 Weeks</button>
   <div class="week-label" id="weekLabel"></div>
   <button class="nav-btn today-btn" onclick="goToToday()">Today</button>
-  <button class="nav-btn" onclick="changeWeek(1)">Next Week &#8594;</button>
+  <button class="nav-btn" onclick="changeWeek(1)">Next 2 Weeks &#8594;</button>
 </div>
 <p class="status-bar" id="statusBar">Loading calendars&hellip;</p>
 
@@ -383,8 +384,11 @@ function getMaxDuration(date, startMins) {
 // ── HELPERS ───────────────────────────────────────────────────────────────
 function getWeekStart() {
   const d = new Date();
-  d.setDate(d.getDate() + weekOffset * 7);
   d.setHours(0,0,0,0);
+  // Snap to Monday of current week (getDay: 0=Sun,1=Mon,...,6=Sat)
+  const dow = d.getDay();
+  const daysToMon = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + daysToMon + weekOffset * 14);
   return d;
 }
 
