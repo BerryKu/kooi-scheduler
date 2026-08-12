@@ -49,7 +49,12 @@
       background: var(--surface); box-shadow: var(--shadow);
     }
     .col-header { padding: .6rem .3rem; text-align: center; background: var(--surface); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); font-size: .72rem; font-weight: 600; color: var(--text-soft); text-transform: uppercase; letter-spacing: .06em; line-height: 1.5; }
-    .col-header.today { color: var(--orange); background: #FDE8D8; }
+    .col-header.sat { border-left: 3px solid #888; }
+    .col-header.sun { border-right: 3px solid #888; }
+    .cell.sat { border-left: 3px solid #888; }
+    .cell.sun { border-right: 3px solid #888; }
+    button.cell.sat { border-left: 3px solid #888; }
+    button.cell.sun { border-right: 3px solid #888; }
     .col-header.corner { border-right: 1px solid var(--border); }
 
     .time-label { padding: 0 .5rem; display: flex; align-items: center; justify-content: flex-end; font-size: .65rem; color: var(--text-soft); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); white-space: nowrap; user-select: none; }
@@ -429,7 +434,8 @@ function renderGrid() {
     const today = d.toDateString() === now.toDateString();
     const dow = d.getDay();
     const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow];
-    html += `<div class="col-header${today ? ' today' : ''}">${dayName}<br>${MONTHS[d.getMonth()]} ${d.getDate()}</div>`;
+    const wkCls = dow === 6 ? ' sat' : dow === 0 ? ' sun' : '';
+    html += `<div class="col-header${today ? ' today' : ''}${wkCls}">${dayName}<br>${MONTHS[d.getMonth()]} ${d.getDate()}</div>`;
   }
 
   for (let mins = MINS_START; mins < MINS_END; mins += 30) {
@@ -453,10 +459,11 @@ function renderGrid() {
         if (st === 'available') click = `data-date="${d.toISOString()}" data-mins="${mins}" data-day="${i}" data-time="${fmtSlot(mins)}"`;
       }
       const dow2 = d.getDay();
+      const wkCellCls = dow2 === 6 ? ' sat' : dow2 === 0 ? ' sun' : '';
       if (st === 'available') {
-        html += `<button class="${cls}" ${click} aria-label="Schedule ${fmtSlot(mins)}"></button>`;
+        html += `<button class="${cls}${wkCellCls}" ${click} aria-label="Schedule ${fmtSlot(mins)}"></button>`;
       } else {
-        html += `<div class="${cls}"></div>`;
+        html += `<div class="${cls}${wkCellCls}"></div>`;
       }
     }
   }
