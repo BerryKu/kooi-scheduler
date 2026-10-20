@@ -142,10 +142,10 @@
 </header>
 
 <div class="week-nav">
-  <button class="nav-btn" onclick="changeWeek(-1)">&#8592; Prev 2 Weeks</button>
+  <button class="nav-btn" onclick="changeWeek(-1)">&#8592; Last Week</button>
   <div class="week-label" id="weekLabel"></div>
   <button class="nav-btn today-btn" onclick="goToToday()">Today</button>
-  <button class="nav-btn" onclick="changeWeek(1)">Next 2 Weeks &#8594;</button>
+  <button class="nav-btn" onclick="changeWeek(1)">Next Week &#8594;</button>
 </div>
 <p class="status-bar" id="statusBar">Loading calendars&hellip;</p>
 
@@ -390,10 +390,10 @@ function getMaxDuration(date, startMins) {
 function getWeekStart() {
   const d = new Date();
   d.setHours(0,0,0,0);
-  // Snap to Monday of current week (getDay: 0=Sun,1=Mon,...,6=Sat)
+  // Snap to Monday of current week
   const dow = d.getDay();
   const daysToMon = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + daysToMon + weekOffset * 14);
+  d.setDate(d.getDate() + daysToMon + weekOffset * 7);
   return d;
 }
 
@@ -419,7 +419,7 @@ function fmtWeekRange(start, numDays) {
 function isMobileWidth() { return window.innerWidth < 768; }
 
 function renderGrid() {
-  const numDays = isMobileWidth() ? 7 : 14;
+  const numDays = 7;
   const grid  = document.getElementById('calGrid');
   const start = getWeekStart();
   const now   = new Date();
